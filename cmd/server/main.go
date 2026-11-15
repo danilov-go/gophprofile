@@ -37,21 +37,27 @@ func main() {
 	}
 	var storage service.Storage
 	if cfg.DatabaseDSN != "" {
-		db, err := db.InitDB(cfg.DatabaseDSN)
+		_, err := db.InitDB(cfg.DatabaseDSN)
 		if err != nil {
 			logger.Log.Sugar().Fatalw("ошибка инициализации базы данных", "error", err)
 		}
-		storage = db
+		storage = nil
 	} else {
 		storage = memory.NewMemStorage()
 	}
-	srvс := service.NewService(storage)
+	s3 := memory.NewMemStorageS3()
+	srvс := service.NewService(storage, s3)
 	h := handler.NewHandler(srvс, logger.Log.Sugar(), cfg.WebPath)
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 	defer stop()
 	g, gCtx := errgroup.WithContext(ctx)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /web/upload", h.GetForm)
+	mux.HandleFunc("POST /api/v1/avatars", h.ApiUploadHandler)
+	mux.HandleFunc("GET /api/v1/avatars/{avatar_id}", h.ApiGetAvatarHandler)
+	mux.HandleFunc("GET /api/v1/avatars/{avatar_id}/metadata", h.ApiGetMetaDataHandler)
+	mux.HandleFunc("DELETE /api/v1/avatars/{avatar_id}", h.ApiDeleteAvatarHandler)
+	mux.HandleFunc("GET /health", h.HealthHandler)
 	serv := server.New(cfg.Net.String(), logger.Log.Sugar(), mux)
 	g.Go(func() error {
 		logger.Log.Sugar().Info("Сервер запущен по протоколу HTTP на ", cfg.Net.String())
