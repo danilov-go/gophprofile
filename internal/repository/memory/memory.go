@@ -1,3 +1,4 @@
+// Package memory реализует хранилище данных в оперативной памяти.
 package memory
 
 import (
@@ -21,6 +22,7 @@ func NewMemStorage() *MemStorage {
 	}
 }
 
+// Save сохраняет метаданные аватарки в оперативной памяти.
 func (m *MemStorage) Save(ctx context.Context, meta models.Avatar) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -31,6 +33,7 @@ func (m *MemStorage) Save(ctx context.Context, meta models.Avatar) error {
 	return nil
 }
 
+// Get возвращает метаданные аватарки из оперативной памяти.
 func (m *MemStorage) Get(ctx context.Context, id string) (models.Avatar, error) {
 	if err := ctx.Err(); err != nil {
 		return models.Avatar{}, err
@@ -44,6 +47,7 @@ func (m *MemStorage) Get(ctx context.Context, id string) (models.Avatar, error) 
 	return meta, nil
 }
 
+// Delete удаляет метаданные аватарки из оперативной памяти.
 func (m *MemStorage) Delete(ctx context.Context, id string) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -58,5 +62,13 @@ func (m *MemStorage) Delete(ctx context.Context, id string) error {
 	meta.DeletedAt = &now
 	meta.UpdatedAt = now
 	m.metaData[id] = meta
+	return nil
+}
+
+// Ping проверяет доступность хранилища.
+func (m *MemStorage) Ping(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return nil
 }

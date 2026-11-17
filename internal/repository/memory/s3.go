@@ -21,6 +21,7 @@ func NewMemStorageS3() *MemStorageS3 {
 	}
 }
 
+// Upload загружает данные в оперативную память.
 func (m *MemStorageS3) Upload(ctx context.Context, s3Key string, imageData []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -31,6 +32,7 @@ func (m *MemStorageS3) Upload(ctx context.Context, s3Key string, imageData []byt
 	return nil
 }
 
+// Download скачивает файл из оперативной памяти.
 func (m *MemStorageS3) Download(ctx context.Context, s3Key string) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -44,6 +46,7 @@ func (m *MemStorageS3) Download(ctx context.Context, s3Key string) ([]byte, erro
 	return bytes.Clone(imageData), nil
 }
 
+// Delete удаляет файл из оперативной памяти.
 func (m *MemStorageS3) Delete(ctx context.Context, s3Key string) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -51,5 +54,13 @@ func (m *MemStorageS3) Delete(ctx context.Context, s3Key string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.image, s3Key)
+	return nil
+}
+
+// Ping проверяет доступность хранилища.
+func (m *MemStorageS3) Ping(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return nil
 }

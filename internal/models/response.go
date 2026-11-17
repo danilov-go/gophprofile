@@ -2,6 +2,7 @@ package models
 
 import "time"
 
+// UploadResponse определяет ответ сервера при успешной загрузке аватарки.
 type UploadResponse struct {
 	ID        string    `json:"id"`
 	UserID    string    `json:"user_id"`
@@ -10,12 +11,14 @@ type UploadResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// ErrorResponse определяет ответ сервера при возникновении ошибки.
 type ErrorResponse struct {
 	Error   string `json:"error"`
 	Details string `json:"details,omitempty"`
 	MaxSize int64  `json:"max_size,omitempty"`
 }
 
+// MetaDataResponse определяет ответ сервера с метаданными аватарки.
 type MetaDataResponse struct {
 	ID         string      `json:"id"`
 	UserID     string      `json:"user_id"`

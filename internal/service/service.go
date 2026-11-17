@@ -1,8 +1,10 @@
+// Package service реализует бизнес логику приложения.
 package service
 
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	_ "image/jpeg"
@@ -14,23 +16,29 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
+// Storage определяет методы взаимодействия с хранилищем метаданных аватарок.
 type Storage interface {
 	Save(ctx context.Context, meta models.Avatar) error
 	Get(ctx context.Context, id string) (models.Avatar, error)
 	Delete(ctx context.Context, id string) error
+	Ping(ctx context.Context) error
 }
 
+// S3 определяет методы взаимодействия с объектным хранилищем файлов.
 type S3 interface {
 	Upload(ctx context.Context, s3Key string, imageData []byte) error
 	Download(ctx context.Context, s3Key string) ([]byte, error)
 	Delete(ctx context.Context, s3Key string) error
+	Ping(ctx context.Context) error
 }
 
+// Service реализует бизнес логику работы с аватарками.
 type Service struct {
 	storage Storage
 	s3      S3
 }
 
+// NewService создает новый экземпляр Service.
 func NewService(s Storage, s3 S3) *Service {
 	return &Service{
 		storage: s,
@@ -38,6 +46,7 @@ func NewService(s Storage, s3 S3) *Service {
 	}
 }
 
+// Save загружает аватарку в S3 и сохраняет метаданные в хранилище.
 func (s *Service) Save(ctx context.Context, imageData []byte, userID, fileName, mimeType string) (models.Avatar, error) {
 	if int64(len(imageData)) > models.MaxSize {
 		return models.Avatar{}, models.ErrFileTooLarge
@@ -61,8 +70,9 @@ func (s *Service) Save(ctx context.Context, imageData []byte, userID, fileName, 
 			Width:  cfg.Width,
 			Height: cfg.Height,
 		},
-		CreatedAt: now,
-		UpdatedAt: now,
+		ProcessingStatus: "processing",
+		CreatedAt:        now,
+		UpdatedAt:        now,
 	}
 	meta.GenerateS3Key(ext)
 	if err := s.s3.Upload(ctx, meta.S3Key, imageData); err != nil {
@@ -82,6 +92,7 @@ func (s *Service) getAvatar(ctx context.Context, id string) (models.Avatar, erro
 	return s.storage.Get(ctx, id)
 }
 
+// Get возвращает метаданные и свм файл аватарки.
 func (s *Service) Get(ctx context.Context, id string) (models.Avatar, []byte, error) {
 	meta, err := s.getAvatar(ctx, id)
 	if err != nil {
@@ -94,6 +105,7 @@ func (s *Service) Get(ctx context.Context, id string) (models.Avatar, []byte, er
 	return meta, imageData, nil
 }
 
+// GetMetadata возвращает метаданные аватарки.
 func (s *Service) GetMetadata(ctx context.Context, id string) (models.MetaDataResponse, error) {
 	meta, err := s.getAvatar(ctx, id)
 	if err != nil {
@@ -119,6 +131,7 @@ func (s *Service) GetMetadata(ctx context.Context, id string) (models.MetaDataRe
 	}, nil
 }
 
+// Delete удаляет аватарку из базы данных и S3.
 func (s *Service) Delete(ctx context.Context, id, userID string) error {
 	meta, err := s.getAvatar(ctx, id)
 	if err != nil {
@@ -131,4 +144,11 @@ func (s *Service) Delete(ctx context.Context, id, userID string) error {
 		return err
 	}
 	return s.s3.Delete(ctx, meta.S3Key)
+}
+
+// Health проверяет доступность базы данных и S3-хранилища.
+func (s *Service) Health(ctx context.Context) error {
+	errS3 := s.s3.Ping(ctx)
+	errDB := s.storage.Ping(ctx)
+	return errors.Join(errS3, errDB)
 }

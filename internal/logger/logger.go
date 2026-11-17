@@ -16,8 +16,8 @@ func Initialize(level string) error {
 	}
 	cfg := zap.NewProductionConfig()
 	cfg.Level = lvl
-	cfg.OutputPaths = []string{"debug.log"}
-	cfg.ErrorOutputPaths = []string{"debug.log"}
+	cfg.OutputPaths = []string{"stdout"}
+	cfg.ErrorOutputPaths = []string{"stderr"}
 	zl, err := cfg.Build()
 	if err != nil {
 		return err

@@ -8,7 +8,8 @@ import (
 	"github.com/danilov-go/gophprofile/internal/models"
 )
 
-func (h *Handler) ApiUploadHandler(w http.ResponseWriter, r *http.Request) {
+// APIUploadHandler загружает новую аватарку.
+func (h *Handler) APIUploadHandler(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("X-User-ID")
 	if userID == "" {
 		h.writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{
@@ -54,12 +55,13 @@ func (h *Handler) ApiUploadHandler(w http.ResponseWriter, r *http.Request) {
 		ID:        meta.ID,
 		UserID:    meta.UserID,
 		URL:       "/api/v1/avatars/" + meta.ID,
-		Status:    "processing",
+		Status:    meta.ProcessingStatus,
 		CreatedAt: meta.CreatedAt,
 	})
 }
 
-func (h *Handler) ApiGetAvatarHandler(w http.ResponseWriter, r *http.Request) {
+// APIGetAvatarHandler возвращает аватарку.
+func (h *Handler) APIGetAvatarHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("avatar_id")
 	meta, imageData, err := h.service.Get(r.Context(), id)
 	if err != nil {
@@ -74,7 +76,8 @@ func (h *Handler) ApiGetAvatarHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handler) ApiGetMetaDataHandler(w http.ResponseWriter, r *http.Request) {
+// APIGetMetaDataHandler возвращает метаданные аватарки.
+func (h *Handler) APIGetMetaDataHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("avatar_id")
 	meta, err := h.service.GetMetadata(r.Context(), id)
 	if err != nil {
@@ -84,7 +87,8 @@ func (h *Handler) ApiGetMetaDataHandler(w http.ResponseWriter, r *http.Request) 
 	h.writeJSON(w, http.StatusOK, meta)
 }
 
-func (h *Handler) ApiDeleteAvatarHandler(w http.ResponseWriter, r *http.Request) {
+// APIDeleteAvatarHandler удаляет аватарку.
+func (h *Handler) APIDeleteAvatarHandler(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("X-User-ID")
 	if userID == "" {
 		h.writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{
@@ -101,7 +105,15 @@ func (h *Handler) ApiDeleteAvatarHandler(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// HealthHandler проверяет состояние сервиса.
 func (h *Handler) HealthHandler(w http.ResponseWriter, r *http.Request) {
+	if err := h.service.Health(r.Context()); err != nil {
+		h.writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"status": "error",
+			"error":  err.Error(),
+		})
+		return
+	}
 	h.writeJSON(w, http.StatusOK, map[string]string{
 		"status": "ok",
 	})

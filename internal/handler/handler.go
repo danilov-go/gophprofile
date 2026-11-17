@@ -1,3 +1,4 @@
+// Package handler реализует HTTP-интерфейс приложения.
 package handler
 
 import (
@@ -9,31 +10,36 @@ import (
 	"github.com/danilov-go/gophprofile/internal/models"
 )
 
-type Logger interface {
+type log interface {
 	Errorw(msg string, keysAndValues ...any)
 }
 
+// Service определяет методы взаимодействия с бизнес логикой.
 type Service interface {
 	Save(ctx context.Context, imageData []byte, userID, fileName, memTipe string) (models.Avatar, error)
 	Get(ctx context.Context, id string) (models.Avatar, []byte, error)
 	GetMetadata(ctx context.Context, id string) (models.MetaDataResponse, error)
 	Delete(ctx context.Context, id, userID string) error
+	Health(ctx context.Context) error
 }
 
+// Handler связывает HTTP-запросов с бизнес логикой.
 type Handler struct {
 	webPath string
 	service Service
-	logger  Logger
+	logger  log
 }
 
-func NewHandler(service Service, logger Logger, webPath string) *Handler {
+// NewHandler возвращает новый экземпляр Handler.
+func NewHandler(service Service, l log, webPath string) *Handler {
 	return &Handler{
 		webPath: webPath,
 		service: service,
-		logger:  logger,
+		logger:  l,
 	}
 }
 
+// GetForm отдает HTML-форму загрузки аватарки.
 func (h *Handler) GetForm(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, h.webPath)
 }

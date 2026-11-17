@@ -2,9 +2,13 @@
 package db
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"time"
 
+	"github.com/danilov-go/gophprofile/internal/models"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -55,4 +59,84 @@ func InitDB(ps string) (*storageDB, error) {
 	return &storageDB{
 		db: db,
 	}, nil
+}
+
+// Save сохраняет метаданные аватарки в базе данных.
+func (s *storageDB) Save(ctx context.Context, meta models.Avatar) error {
+	thumbs, err := json.Marshal(meta.ThumbnailS3Keys)
+	if err != nil {
+		return err
+	}
+	if meta.ThumbnailS3Keys == nil {
+		thumbs = []byte("{}")
+	}
+	query := `
+		INSERT INTO avatars (id, user_id, file_name, mime_type, size_bytes,
+		width, height, s3_key, thumbnail_s3_keys,upload_status, processing_status,
+		created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+	`
+	_, err = s.db.ExecContext(ctx, query,
+		meta.ID, meta.UserID, meta.FileName, meta.MimeType, meta.SizeBytes,
+		meta.Dimensions.Width, meta.Dimensions.Height, meta.S3Key, thumbs,
+		meta.UploadStatus, meta.ProcessingStatus, meta.CreatedAt, meta.UpdatedAt,
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Get возвращает метаданные аватарки из базы данных.
+func (s *storageDB) Get(ctx context.Context, id string) (models.Avatar, error) {
+	query := `
+		SELECT id, user_id, file_name, mime_type, size_bytes, width, height, 
+		s3_key, thumbnail_s3_keys, upload_status, processing_status, created_at, 
+		updated_at, deleted_at FROM avatars WHERE id = $1 AND deleted_at IS NULL
+	`
+	var meta models.Avatar
+	var thumbs []byte
+	var deletedAt sql.NullTime
+	err := s.db.QueryRowContext(ctx, query, id).Scan(
+		&meta.ID, &meta.UserID, &meta.FileName, &meta.MimeType, &meta.SizeBytes,
+		&meta.Dimensions.Width, &meta.Dimensions.Height, &meta.S3Key, &thumbs,
+		&meta.UploadStatus, &meta.ProcessingStatus, &meta.CreatedAt, &meta.UpdatedAt, &deletedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.Avatar{}, models.ErraAvatarNotFound
+		}
+		return models.Avatar{}, err
+	}
+	if len(thumbs) > 0 {
+		if err := json.Unmarshal(thumbs, &meta.ThumbnailS3Keys); err != nil {
+			return models.Avatar{}, err
+		}
+	}
+	if deletedAt.Valid {
+		meta.DeletedAt = &deletedAt.Time
+	}
+	return meta, nil
+}
+
+// Delete помечает метаданные аватарки как удаленные в базе данных.
+func (s *storageDB) Delete(ctx context.Context, id string) error {
+	query := `UPDATE avatars SET deleted_at = $1, updated_at = $1 WHERE id = $2 AND deleted_at IS NULL`
+	now := time.Now().UTC()
+	res, err := s.db.ExecContext(ctx, query, now, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return models.ErraAvatarNotFound
+	}
+	return nil
+}
+
+// Ping проверяет доступность хранилища.
+func (s *storageDB) Ping(ctx context.Context) error {
+	return s.db.PingContext(ctx)
 }

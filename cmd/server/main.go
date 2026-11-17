@@ -11,7 +11,7 @@ import (
 	"github.com/danilov-go/gophprofile/internal/handler"
 	"github.com/danilov-go/gophprofile/internal/logger"
 	"github.com/danilov-go/gophprofile/internal/repository/db"
-	"github.com/danilov-go/gophprofile/internal/repository/memory"
+	"github.com/danilov-go/gophprofile/internal/repository/s3"
 	"github.com/danilov-go/gophprofile/internal/server"
 	"github.com/danilov-go/gophprofile/internal/service"
 	"golang.org/x/sync/errgroup"
@@ -35,28 +35,25 @@ func main() {
 	if err := cfg.Validate(); err != nil {
 		logger.Log.Sugar().Fatal(err)
 	}
-	var storage service.Storage
-	if cfg.DatabaseDSN != "" {
-		_, err := db.InitDB(cfg.DatabaseDSN)
-		if err != nil {
-			logger.Log.Sugar().Fatalw("ошибка инициализации базы данных", "error", err)
-		}
-		storage = nil
-	} else {
-		storage = memory.NewMemStorage()
+	storageDB, err := db.InitDB(cfg.DatabaseDSN)
+	if err != nil {
+		logger.Log.Sugar().Fatalw("ошибка инициализации базы данных", "error", err)
 	}
-	s3 := memory.NewMemStorageS3()
-	srvс := service.NewService(storage, s3)
-	h := handler.NewHandler(srvс, logger.Log.Sugar(), cfg.WebPath)
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 	defer stop()
+	clientS3, err := s3.NewS3Client(ctx, cfg.S3)
+	if err != nil {
+		logger.Log.Sugar().Fatalw("ошибка инициализации S3 клиента", "error", err)
+	}
+	srvс := service.NewService(storageDB, clientS3)
+	h := handler.NewHandler(srvс, logger.Log.Sugar(), cfg.WebPath)
 	g, gCtx := errgroup.WithContext(ctx)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /web/upload", h.GetForm)
-	mux.HandleFunc("POST /api/v1/avatars", h.ApiUploadHandler)
-	mux.HandleFunc("GET /api/v1/avatars/{avatar_id}", h.ApiGetAvatarHandler)
-	mux.HandleFunc("GET /api/v1/avatars/{avatar_id}/metadata", h.ApiGetMetaDataHandler)
-	mux.HandleFunc("DELETE /api/v1/avatars/{avatar_id}", h.ApiDeleteAvatarHandler)
+	mux.HandleFunc("POST /api/v1/avatars", h.APIUploadHandler)
+	mux.HandleFunc("GET /api/v1/avatars/{avatar_id}", h.APIGetAvatarHandler)
+	mux.HandleFunc("GET /api/v1/avatars/{avatar_id}/metadata", h.APIGetMetaDataHandler)
+	mux.HandleFunc("DELETE /api/v1/avatars/{avatar_id}", h.APIDeleteAvatarHandler)
 	mux.HandleFunc("GET /health", h.HealthHandler)
 	serv := server.New(cfg.Net.String(), logger.Log.Sugar(), mux)
 	g.Go(func() error {
