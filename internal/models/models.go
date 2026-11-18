@@ -34,6 +34,16 @@ type Thumbnail struct {
 	URL  string `json:"url"`
 }
 
+type ThumbnailData struct {
+	Size SizeAvatar
+	Data []byte
+}
+
+var Targets = map[SizeAvatar]Dimensions{
+	SizeSmall:  {Width: 100, Height: 100},
+	SizeMedium: {Width: 300, Height: 300},
+}
+
 // Ошибки бизнес логики при работе с аватарками.
 var (
 	ErrInvalidFormat   = errors.New("invalid file format")
@@ -62,6 +72,11 @@ type Avatar struct {
 // GenerateS3Key формирует ключ аватарки для хранения в S3.
 func (a *Avatar) GenerateS3Key(ext string) {
 	a.S3Key = fmt.Sprintf("avatars/%s/%s%s", a.UserID, a.ID, ext)
+}
+
+// GenerateThumbnailS3Key формирует ключ миниатюры для хранения в S3.
+func GenerateThumbnailS3Key(avatarID string, size SizeAvatar) string {
+	return fmt.Sprintf("thumbnails/%s/%s.jpg", avatarID, size)
 }
 
 var mimeToExt = map[string]string{

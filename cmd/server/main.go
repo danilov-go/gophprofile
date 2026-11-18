@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/danilov-go/gophprofile/internal/broker"
 	"github.com/danilov-go/gophprofile/internal/config"
 	"github.com/danilov-go/gophprofile/internal/handler"
 	"github.com/danilov-go/gophprofile/internal/logger"
@@ -18,9 +19,9 @@ import (
 )
 
 var (
-	buildVersion string = "N/A"
-	buildDate    string = "N/A"
-	buildCommit  string = "N/A"
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
 )
 
 func main() {
@@ -28,25 +29,38 @@ func main() {
 	if err := logger.Initialize("info"); err != nil {
 		panic(err)
 	}
-	cfg := &config.ConfigServer{}
-	if err := cfg.Get(); err != nil {
-		logger.Log.Sugar().Fatal("ошибка парсинга конфигурации сервера")
+	if err := run(); err != nil {
+		os.Exit(1)
 	}
-	if err := cfg.Validate(); err != nil {
-		logger.Log.Sugar().Fatal(err)
+}
+
+func run() error {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
+	defer stop()
+	cfg := &config.ConfigServer{}
+	if err := cfg.Parse(); err != nil {
+		logger.Log.Sugar().Error("ошибка парсинга конфигурации сервера")
+		return err
 	}
 	storageDB, err := db.InitDB(cfg.DatabaseDSN)
 	if err != nil {
-		logger.Log.Sugar().Fatalw("ошибка инициализации базы данных", "error", err)
+		logger.Log.Sugar().Errorw("ошибка инициализации базы данных", "error", err)
+		return err
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
-	defer stop()
+	defer func() { _ = storageDB.Close() }()
 	clientS3, err := s3.NewS3Client(ctx, cfg.S3)
 	if err != nil {
-		logger.Log.Sugar().Fatalw("ошибка инициализации S3 клиента", "error", err)
+		logger.Log.Sugar().Errorw("ошибка инициализации S3 клиента", "error", err)
+		return err
 	}
-	srvс := service.NewService(storageDB, clientS3)
-	h := handler.NewHandler(srvс, logger.Log.Sugar(), cfg.WebPath)
+	producer, err := broker.NewProducer(cfg.Kafka.Brokers, cfg.Kafka.Topic)
+	if err != nil {
+		logger.Log.Sugar().Errorw("ошибка инициализации брокера", "error", err)
+		return err
+	}
+	defer func() { _ = producer.Close() }()
+	srvc := service.NewService(storageDB, clientS3, producer)
+	h := handler.NewHandler(srvc, logger.Log.Sugar(), cfg.WebPath)
 	g, gCtx := errgroup.WithContext(ctx)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /web/upload", h.GetForm)
@@ -55,9 +69,9 @@ func main() {
 	mux.HandleFunc("GET /api/v1/avatars/{avatar_id}/metadata", h.APIGetMetaDataHandler)
 	mux.HandleFunc("DELETE /api/v1/avatars/{avatar_id}", h.APIDeleteAvatarHandler)
 	mux.HandleFunc("GET /health", h.HealthHandler)
-	serv := server.New(cfg.Net.String(), logger.Log.Sugar(), mux)
+	serv := server.New(cfg.Net, logger.Log.Sugar(), mux)
 	g.Go(func() error {
-		logger.Log.Sugar().Info("Сервер запущен по протоколу HTTP на ", cfg.Net.String())
+		logger.Log.Sugar().Info("Сервер запущен по протоколу HTTP на ", cfg.Net)
 		return serv.Run()
 	})
 	g.Go(func() error {
@@ -66,6 +80,8 @@ func main() {
 		return serv.Stop()
 	})
 	if err := g.Wait(); err != nil {
-		logger.Log.Sugar().Fatal("сервер аварийно завершил работу", "err", err)
+		logger.Log.Sugar().Errorw("сервер аварийно завершил работу", "err", err)
+		return err
 	}
+	return nil
 }

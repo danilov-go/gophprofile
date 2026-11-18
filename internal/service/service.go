@@ -4,6 +4,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -34,15 +35,21 @@ type S3 interface {
 
 // Service реализует бизнес логику работы с аватарками.
 type Service struct {
-	storage Storage
-	s3      S3
+	storage  Storage
+	s3       S3
+	producer Producer
+}
+
+type Producer interface {
+	Send(ctx context.Context, key, eventType string, eventBytes []byte) error
 }
 
 // NewService создает новый экземпляр Service.
-func NewService(s Storage, s3 S3) *Service {
+func NewService(storage Storage, s3 S3, producer Producer) *Service {
 	return &Service{
-		storage: s,
-		s3:      s3,
+		storage:  storage,
+		s3:       s3,
+		producer: producer,
 	}
 }
 
@@ -71,6 +78,7 @@ func (s *Service) Save(ctx context.Context, imageData []byte, userID, fileName, 
 			Height: cfg.Height,
 		},
 		ProcessingStatus: "processing",
+		UploadStatus:     "uploaded",
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -79,6 +87,11 @@ func (s *Service) Save(ctx context.Context, imageData []byte, userID, fileName, 
 		return models.Avatar{}, err
 	}
 	if err := s.storage.Save(ctx, meta); err != nil {
+		_ = s.s3.Delete(context.WithoutCancel(ctx), meta.S3Key)
+		return models.Avatar{}, err
+	}
+	if err := s.PublishUploadEvent(ctx, meta.ID, meta.UserID, meta.S3Key); err != nil {
+		_ = s.storage.Delete(ctx, meta.ID)
 		_ = s.s3.Delete(context.WithoutCancel(ctx), meta.S3Key)
 		return models.Avatar{}, err
 	}
@@ -151,4 +164,29 @@ func (s *Service) Health(ctx context.Context) error {
 	errS3 := s.s3.Ping(ctx)
 	errDB := s.storage.Ping(ctx)
 	return errors.Join(errS3, errDB)
+}
+
+func (s *Service) PublishUploadEvent(ctx context.Context, avatarID, userID, s3Key string) error {
+	event := models.AvatarUploadEvent{
+		AvatarID: avatarID,
+		UserID:   userID,
+		S3Key:    s3Key,
+	}
+	eventBytes, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	return s.producer.Send(ctx, avatarID, "upload", eventBytes)
+}
+
+func (s *Service) PublishDeleteEvent(ctx context.Context, avatarID string, s3Keys []string) error {
+	event := models.AvatarDeleteEvent{
+		AvatarID: avatarID,
+		S3Keys:   s3Keys,
+	}
+	eventBytes, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	return s.producer.Send(ctx, avatarID, "delete", eventBytes)
 }

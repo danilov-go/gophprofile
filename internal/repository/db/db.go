@@ -136,6 +136,42 @@ func (s *storageDB) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// UpdateProcessingStatus обновляет статус обработки аватарки и ключи миниатюр в БД.
+func (s *storageDB) UpdateProcessingStatus(ctx context.Context, id, status string, thumbnailKeys map[models.SizeAvatar]string) error {
+	var thumbs []byte
+	var err error
+	if thumbnailKeys != nil {
+		thumbs, err = json.Marshal(thumbnailKeys)
+		if err != nil {
+			return err
+		}
+	}
+	query := `
+		UPDATE avatars 
+		SET processing_status = $1, 
+		    thumbnail_s3_keys = COALESCE($2::jsonb, thumbnail_s3_keys), 
+		    updated_at = $3 
+		WHERE id = $4 AND deleted_at IS NULL
+	`
+	res, err := s.db.ExecContext(ctx, query, status, thumbs, time.Now().UTC(), id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return models.ErraAvatarNotFound
+	}
+	return nil
+}
+
+// CLose закрывает соединение с БД.
+func (s *storageDB) Close() error {
+	return s.db.Close()
+}
+
 // Ping проверяет доступность хранилища.
 func (s *storageDB) Ping(ctx context.Context) error {
 	return s.db.PingContext(ctx)

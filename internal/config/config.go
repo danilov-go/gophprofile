@@ -2,52 +2,34 @@
 package config
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"strconv"
-	"strings"
+
+	"github.com/caarlos0/env/v11"
 )
 
-// NetAddress определяет адрес сервера.
-type NetAddress struct {
-	Host string
-	Port int
+// BaseConfig объединяет общие настройки для сервера и воркера.
+type BaseConfig struct {
+	DatabaseDSN string `env:"DATABASE_DSN,notEmpty"`
+	S3          S3Config
+	Kafka       KafkaConfig
 }
 
-// String возвращает строковое представление сетевого адреса в формате host:port.
-func (n NetAddress) String() string {
-	return n.Host + ":" + strconv.Itoa(n.Port)
+// S3Config определяет настройки подключения к MinIO / S3.
+type S3Config struct {
+	BucketName string `env:"S3_BUCKET_NAME" envDefault:"avatars"`
+	Region     string `env:"S3_REGION"      envDefault:"us-east-1"`
+	Endpoint   string `env:"S3_ENDPOINT,notEmpty"`
+	AccessKey  string `env:"S3_ACCESS_KEY,notEmpty"`
+	SecretKey  string `env:"S3_SECRET_KEY,notEmpty"`
+	UseSSL     bool   `env:"S3_USE_SSL"     envDefault:"false"`
 }
 
-// UnmarshalText десериализует сетевой адрес из текстового формата.
-func (n *NetAddress) UnmarshalText(adr []byte) error {
-	return n.Set(string(adr))
-}
-
-// Set парсит строку в формате host:port и валидирует ее.
-func (n *NetAddress) Set(s string) error {
-	hp := strings.Split(s, ":")
-	if len(hp) != 2 {
-		return errors.New("need address in a form host:port")
-	}
-	port, err := strconv.Atoi(hp[1])
-	if err != nil {
-		return err
-	}
-	n.Host = hp[0]
-	n.Port = port
-	return nil
-}
-
-// UnmarshalJSON десериализует сетевой адрес из JSON формата.
-func (n *NetAddress) UnmarshalJSON(data []byte) error {
-	var str string
-	if err := json.Unmarshal(data, &str); err != nil {
-		return err
-	}
-	return n.Set(str)
+// KafkaConfig определяет настройки подключения к Kafka.
+type KafkaConfig struct {
+	Brokers []string `env:"KAFKA_BROKERS"  envDefault:"localhost:9092"`
+	Topic   string   `env:"KAFKA_TOPIC"    envDefault:"avatar-events"`
+	GroupID string   `env:"KAFKA_GROUP_ID" envDefault:"avatar-workers-group"`
 }
 
 // PrintBuild выводит в консоль информацию о текущей сборке приложения.
@@ -55,4 +37,26 @@ func PrintBuild(w io.Writer, version, date, commit string) {
 	fmt.Fprintf(w, "Build version: %s\n", version)
 	fmt.Fprintf(w, "Build date: %s\n", date)
 	fmt.Fprintf(w, "Build commit: %s\n", commit)
+}
+
+// ConfigServer определяет настройки сервера.
+type ConfigServer struct {
+	Net     string `env:"ADDRESS"  envDefault:"0.0.0.0:8080"`
+	WebPath string `env:"WEB_PATH" envDefault:"./web/static/index.html"`
+	BaseConfig
+}
+
+// Parse парсит конфигурацию сервера.
+func (c *ConfigServer) Parse() error {
+	return env.Parse(c)
+}
+
+// ConfigServer описывает настройки воркера.
+type ConfigWorker struct {
+	BaseConfig
+}
+
+// Parse парсит конфигурацию воркера.
+func (c *ConfigWorker) Parse() error {
+	return env.Parse(c)
 }
