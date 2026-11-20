@@ -137,7 +137,7 @@ func (s *storageDB) Delete(ctx context.Context, id string) error {
 }
 
 // UpdateProcessingStatus обновляет статус обработки аватарки и ключи миниатюр в базе данных.
-func (s *storageDB) UpdateProcessingStatus(ctx context.Context, id, status string, thumbnailKeys map[models.SizeAvatar]string) error {
+func (s *storageDB) UpdateProcessingStatus(ctx context.Context, id string, status models.ProcessingStatus, thumbnailKeys map[models.SizeAvatar]string) error {
 	var thumbs []byte
 	var err error
 	if thumbnailKeys != nil {

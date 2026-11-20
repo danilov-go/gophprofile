@@ -4,19 +4,19 @@ import (
 	"net/http"
 
 	"github.com/danilov-go/gophprofile/internal/models"
+	"github.com/go-chi/chi/v5"
 )
 
 // DeleteAvatar удаляет аватарку.
-func (h *Handler) DeleteAvatar(w http.ResponseWriter, r *http.Request) {
-	userID := r.Header.Get("X-User-ID")
-	if userID == "" {
-		h.writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{
-			Error:   "Empty userID",
-			Details: "X-User-ID header is required",
+func (h *Handler) DeleteAvatar(w http.ResponseWriter, r *http.Request, userID string) {
+	id := chi.URLParam(r, "avatar_id")
+	if id == "" {
+		h.writeJSON(w, http.StatusBadRequest, models.ErrorResponse{
+			Error:   "Empty avatarID",
+			Details: "avatar_id path parameter is required",
 		})
 		return
 	}
-	id := r.PathValue("avatar_id")
 	if err := h.service.Delete(r.Context(), id, userID); err != nil {
 		h.handleError(w, err)
 		return
@@ -25,27 +25,7 @@ func (h *Handler) DeleteAvatar(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteUserAvatar удаляет текущую аватарку пользователя.
-func (h *Handler) DeleteUserAvatar(w http.ResponseWriter, r *http.Request) {
-	userID := r.PathValue("user_id")
-	if userID == "" {
-		h.writeJSON(w, http.StatusBadRequest, models.ErrorResponse{
-			Error:   "Empty userID",
-			Details: "user_id path parameter is required",
-		})
-		return
-	}
-	headerUserID := r.Header.Get("X-User-ID")
-	if headerUserID == "" {
-		h.writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{
-			Error:   "Unauthorized",
-			Details: "X-User-ID header is required",
-		})
-		return
-	}
-	if headerUserID != userID {
-		h.handleError(w, models.ErrForbidden)
-		return
-	}
+func (h *Handler) DeleteUserAvatar(w http.ResponseWriter, r *http.Request, userID string) {
 	if err := h.service.DeleteByUserID(r.Context(), userID); err != nil {
 		h.handleError(w, err)
 		return

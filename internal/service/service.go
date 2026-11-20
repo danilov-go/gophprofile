@@ -3,7 +3,6 @@ package service
 
 import (
 	"context"
-	"errors"
 
 	"github.com/danilov-go/gophprofile/internal/models"
 )
@@ -27,7 +26,7 @@ type S3 interface {
 }
 
 type Producer interface {
-	Send(ctx context.Context, key, eventType string, eventBytes []byte) error
+	Send(ctx context.Context, key string, eventType models.EventType, eventBytes []byte) error
 	Ping(ctx context.Context) error
 }
 
@@ -54,10 +53,21 @@ func NewService(storage Storage, s3 S3, producer Producer, converter Converter) 
 	}
 }
 
-// Health проверяет доступность базы данных и S3-хранилища.
-func (s *Service) Health(ctx context.Context) error {
-	errS3 := s.s3.Ping(ctx)
-	errDB := s.storage.Ping(ctx)
-	errProducer := s.producer.Ping(ctx)
-	return errors.Join(errS3, errDB, errProducer)
+// Health проверяет доступность базы данных, S3-хранилища и брокера.
+func (s *Service) Health(ctx context.Context) models.HealthResponse {
+	resp := models.HealthResponse{
+		DB:     "ok",
+		S3:     "ok",
+		Broker: "ok",
+	}
+	if err := s.storage.Ping(ctx); err != nil {
+		resp.DB = err.Error()
+	}
+	if err := s.s3.Ping(ctx); err != nil {
+		resp.S3 = err.Error()
+	}
+	if err := s.producer.Ping(ctx); err != nil {
+		resp.Broker = err.Error()
+	}
+	return resp
 }

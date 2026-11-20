@@ -37,7 +37,9 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 		})
 	default:
 		h.logger.Errorw("внутренняя ошибка сервера", "error", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		h.writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{
+			Error: "Internal server error",
+		})
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/danilov-go/gophprofile/internal/broker"
 	"github.com/danilov-go/gophprofile/internal/config"
@@ -16,6 +17,10 @@ import (
 	"github.com/danilov-go/gophprofile/internal/repository/s3"
 	"github.com/danilov-go/gophprofile/internal/server"
 	"github.com/danilov-go/gophprofile/internal/service"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/httprate"
+	"github.com/rs/cors"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -64,20 +69,36 @@ func run() error {
 	srvc := service.NewService(storageDB, clientS3, producer, converter)
 	h := handler.NewHandler(srvc, logger.Log.Sugar(), cfg.WebPath)
 	g, gCtx := errgroup.WithContext(ctx)
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /web/upload", h.GetForm)
-	mux.HandleFunc("GET /web/gallery/{user_id}", h.GetGallery)
-	mux.HandleFunc("POST /api/v1/avatars", h.UploadAvatar)
-	mux.HandleFunc("GET /api/v1/avatars/{avatar_id}", h.GetAvatar)
-	mux.HandleFunc("GET /api/v1/users/{user_id}/avatar", h.GetUserAvatar)
-	mux.HandleFunc("GET /api/v1/users/{user_id}/avatars", h.GetUserAvatars)
-	mux.HandleFunc("GET /api/v1/avatars/{avatar_id}/metadata", h.GetAvatarMetadata)
-	mux.HandleFunc("DELETE /api/v1/avatars/{avatar_id}", h.DeleteAvatar)
-	mux.HandleFunc("DELETE /api/v1/users/{user_id}/avatar", h.DeleteUserAvatar)
-	mux.HandleFunc("GET /health", h.Health)
-	serv := server.New(cfg.Net, logger.Log.Sugar(), mux)
+	r := chi.NewRouter()
+	r.Use(middleware.Recoverer)
+	c := cors.New(cors.Options{
+		AllowedOrigins:   []string{cfg.Net},
+		AllowedMethods:   []string{"GET", "POST", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Content-Type", "X-User-ID"},
+		ExposedHeaders:   []string{"ETag"},
+		AllowCredentials: false,
+		MaxAge:           300,
+	})
+	r.Use(c.Handler)
+	r.Use(middleware.ClientIPFromRemoteAddr)
+	r.Use(httprate.LimitBy(100, time.Minute, func(r *http.Request) (string, error) {
+		return httprate.CanonicalizeIP(middleware.GetClientIP(r.Context())), nil
+	}))
+	r.Get("/web/upload", h.GetForm)
+	r.Get("/web/gallery/{user_id}", h.GetGallery)
+	r.Get("/health", h.Health)
+	r.Route("/api/v1", func(r chi.Router) {
+		r.Get("/avatars/{avatar_id}", h.GetAvatar)
+		r.Get("/avatars/{avatar_id}/metadata", h.GetAvatarMetadata)
+		r.Get("/users/{user_id}/avatar", h.GetUserAvatar)
+		r.Get("/users/{user_id}/avatars", h.GetUserAvatars)
+		r.Post("/avatars", h.ValidateUserID(h.UploadAvatar))
+		r.Delete("/avatars/{avatar_id}", h.ValidateUserID(h.DeleteAvatar))
+		r.Delete("/users/{user_id}/avatar", h.ValidateUserID(h.DeleteUserAvatar))
+	})
+	serv := server.New(cfg.Net, logger.Log.Sugar(), r)
 	g.Go(func() error {
-		logger.Log.Sugar().Info("Сервер запущен по протоколу HTTP на ", cfg.Net)
+		logger.Log.Sugar().Info("Сервер запущен на ", cfg.Net)
 		return serv.Run()
 	})
 	g.Go(func() error {

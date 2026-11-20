@@ -23,42 +23,43 @@ func (w *Worker) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.
 				return nil
 			}
 			switch getAction(message.Headers) {
-			case "upload":
+			case models.EventTypeUpload:
 				var event models.AvatarUploadEvent
 				if err := json.Unmarshal(message.Value, &event); err != nil {
 					w.logger.Errorw("ошибка десериализации", "error", err)
 					session.MarkMessage(message, "")
 					continue
 				}
-				if err := w.HandleUploadEvent(session.Context(), event); err != nil {
+				if err := w.retry(session.Context(), func() error {
+					return w.HandleUploadEvent(session.Context(), event)
+				}); err != nil {
 					w.logger.Errorw("ошибка обновления данных", "error", err)
 				}
-				session.MarkMessage(message, "")
-			case "delete":
+			case models.EventTypeDelete:
 				var event models.AvatarDeleteEvent
 				if err := json.Unmarshal(message.Value, &event); err != nil {
 					w.logger.Errorw("ошибка десериализации", "error", err)
-					session.MarkMessage(message, "")
 					continue
 				}
-				if err := w.HandleDeleteEvent(session.Context(), event); err != nil {
-					w.logger.Errorw("ошибка обновления данных", "error", err)
+				if err := w.retry(session.Context(), func() error {
+					return w.HandleDeleteEvent(session.Context(), event)
+				}); err != nil {
+					w.logger.Errorw("ошибка удаления данных", "error", err)
 				}
-				session.MarkMessage(message, "")
 			default:
 				w.logger.Errorw("неизвестный тип события", "event_type", getAction(message.Headers))
-				session.MarkMessage(message, "")
 			}
+			session.MarkMessage(message, "")
 		case <-session.Context().Done():
 			return nil
 		}
 	}
 }
 
-func getAction(headers []*sarama.RecordHeader) string {
+func getAction(headers []*sarama.RecordHeader) models.EventType {
 	for _, h := range headers {
-		if string(h.Key) == "event_type" {
-			return string(h.Value)
+		if string(h.Key) == models.EventTypeHeader {
+			return models.EventType(h.Value)
 		}
 	}
 	return ""

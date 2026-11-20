@@ -2,9 +2,9 @@ package broker
 
 import (
 	"context"
-	"errors"
 
 	"github.com/IBM/sarama"
+	"github.com/danilov-go/gophprofile/internal/models"
 )
 
 type Producer struct {
@@ -14,13 +14,17 @@ type Producer struct {
 }
 
 func NewProducer(addrs []string, topic string) (*Producer, error) {
-	cfg := sarama.NewConfig()
-	cfg.Producer.Return.Successes = true
-	client, err := sarama.NewClient(addrs, cfg)
+	config := sarama.NewConfig()
+	config.Producer.RequiredAcks = sarama.WaitForAll
+	config.Producer.Retry.Max = 3
+	config.Producer.Return.Successes = true
+	config.Producer.Idempotent = true
+	config.Net.MaxOpenRequests = 1
+	client, err := sarama.NewClient(addrs, config)
 	if err != nil {
 		return nil, err
 	}
-	p, err := sarama.NewSyncProducer(addrs, cfg)
+	p, err := sarama.NewSyncProducerFromClient(client)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +35,7 @@ func NewProducer(addrs []string, topic string) (*Producer, error) {
 	}, nil
 }
 
-func (p *Producer) Send(ctx context.Context, key, eventType string, eventBytes []byte) error {
+func (p *Producer) Send(ctx context.Context, key string, eventType models.EventType, eventBytes []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -40,7 +44,7 @@ func (p *Producer) Send(ctx context.Context, key, eventType string, eventBytes [
 		Key:   sarama.StringEncoder(key),
 		Headers: []sarama.RecordHeader{
 			{
-				Key:   []byte("event_type"),
+				Key:   []byte(models.EventTypeHeader),
 				Value: []byte(eventType),
 			},
 		},
@@ -58,5 +62,10 @@ func (p *Producer) Ping(ctx context.Context) error {
 }
 
 func (p *Producer) Close() error {
-	return errors.Join(p.syncProducer.Close(), p.client.Close())
+	errProd := p.syncProducer.Close()
+	errClient := p.client.Close()
+	if errProd != nil {
+		return errProd
+	}
+	return errClient
 }

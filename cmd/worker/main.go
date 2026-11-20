@@ -50,8 +50,15 @@ func run() error {
 		logger.Log.Sugar().Errorw("ошибка инициализации S3 клиента", "error", err)
 		return err
 	}
+	config := worker.Config{
+		Brokers:    cfg.Kafka.Brokers,
+		GroupID:    cfg.Kafka.GroupID,
+		Topic:      cfg.Kafka.Topic,
+		MaxRetries: cfg.MaxRetries,
+		RetryDelay: cfg.RetryDelay,
+	}
 	resizer := imaging.NewResizer()
-	w, err := worker.NewWorker(cfg.Kafka.Brokers, cfg.Kafka.GroupID, cfg.Kafka.Topic, storageDB, clientS3, resizer, logger.Log.Sugar())
+	w, err := worker.NewWorker(config, storageDB, clientS3, resizer, logger.Log.Sugar())
 	if err != nil {
 		logger.Log.Sugar().Errorw("ошибка инициализации воркера", "error", err)
 		return err

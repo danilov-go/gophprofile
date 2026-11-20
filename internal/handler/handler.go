@@ -22,7 +22,7 @@ type Service interface {
 	GetMetadata(ctx context.Context, id string) (models.MetaDataResponse, error)
 	Delete(ctx context.Context, id, userID string) error
 	DeleteByUserID(ctx context.Context, userID string) error
-	Health(ctx context.Context) error
+	Health(ctx context.Context) models.HealthResponse
 }
 
 // Handler связывает HTTP-запросов с бизнес логикой.
@@ -53,14 +53,10 @@ func (h *Handler) GetGallery(w http.ResponseWriter, r *http.Request) {
 
 // HealthHandler проверяет состояние сервиса.
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
-	if err := h.service.Health(r.Context()); err != nil {
-		h.writeJSON(w, http.StatusServiceUnavailable, map[string]string{
-			"status": "error",
-			"error":  err.Error(),
-		})
+	resp := h.service.Health(r.Context())
+	if resp.DB != "ok" || resp.S3 != "ok" || resp.Broker != "ok" {
+		h.writeJSON(w, http.StatusServiceUnavailable, resp)
 		return
 	}
-	h.writeJSON(w, http.StatusOK, map[string]string{
-		"status": "ok",
-	})
+	h.writeJSON(w, http.StatusOK, resp)
 }

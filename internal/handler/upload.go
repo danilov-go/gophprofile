@@ -9,15 +9,7 @@ import (
 )
 
 // UploadAvatar загружает новую аватарку.
-func (h *Handler) UploadAvatar(w http.ResponseWriter, r *http.Request) {
-	userID := r.Header.Get("X-User-ID")
-	if userID == "" {
-		h.writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{
-			Error:   "Empty userID",
-			Details: "X-User-ID header is required",
-		})
-		return
-	}
+func (h *Handler) UploadAvatar(w http.ResponseWriter, r *http.Request, userID string) {
 	r.Body = http.MaxBytesReader(w, r.Body, models.MaxSize)
 	file, header, err := r.FormFile("image")
 	if err != nil {

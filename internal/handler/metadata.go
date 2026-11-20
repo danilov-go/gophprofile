@@ -4,11 +4,19 @@ import (
 	"net/http"
 
 	"github.com/danilov-go/gophprofile/internal/models"
+	"github.com/go-chi/chi/v5"
 )
 
 // GetAvatarMetadata возвращает метаданные аватарки.
 func (h *Handler) GetAvatarMetadata(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("avatar_id")
+	id := chi.URLParam(r, "avatar_id")
+	if id == "" {
+		h.writeJSON(w, http.StatusBadRequest, models.ErrorResponse{
+			Error:   "Empty avatarID",
+			Details: "avatar_id path parameter is required",
+		})
+		return
+	}
 	meta, err := h.service.GetMetadata(r.Context(), id)
 	if err != nil {
 		h.handleError(w, err)
@@ -19,7 +27,7 @@ func (h *Handler) GetAvatarMetadata(w http.ResponseWriter, r *http.Request) {
 
 // GetUserAvatars возвращает список метаданных всех аватарок пользователя.
 func (h *Handler) GetUserAvatars(w http.ResponseWriter, r *http.Request) {
-	userID := r.PathValue("user_id")
+	userID := chi.URLParam(r, "user_id")
 	if userID == "" {
 		h.writeJSON(w, http.StatusBadRequest, models.ErrorResponse{
 			Error:   "Empty userID",

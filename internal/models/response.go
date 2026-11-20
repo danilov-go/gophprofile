@@ -2,13 +2,25 @@ package models
 
 import "time"
 
+// MaxSize определяет максимальный размер аватарки.
+const (
+	MaxSize = 10 << 20
+)
+
+// HealthResponse определяет ответ сервера о состоянии компонентов.
+type HealthResponse struct {
+	DB     string `json:"db"`
+	S3     string `json:"s3"`
+	Broker string `json:"broker"`
+}
+
 // UploadResponse определяет ответ сервера при успешной загрузке аватарки.
 type UploadResponse struct {
-	ID        string    `json:"id"`
-	UserID    string    `json:"user_id"`
-	URL       string    `json:"url"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        string           `json:"id"`
+	UserID    string           `json:"user_id"`
+	URL       string           `json:"url"`
+	Status    ProcessingStatus `json:"status"`
+	CreatedAt time.Time        `json:"created_at"`
 }
 
 // ErrorResponse определяет ответ сервера при возникновении ошибки.

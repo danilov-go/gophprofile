@@ -4,11 +4,12 @@ import (
 	"net/http"
 
 	"github.com/danilov-go/gophprofile/internal/models"
+	"github.com/go-chi/chi/v5"
 )
 
 // GetUserAvatar возвращает текущую аватарку пользователя.
 func (h *Handler) GetUserAvatar(w http.ResponseWriter, r *http.Request) {
-	userID := r.PathValue("user_id")
+	userID := chi.URLParam(r, "user_id")
 	if userID == "" {
 		h.writeJSON(w, http.StatusBadRequest, models.ErrorResponse{
 			Error:   "Empty userID",
@@ -33,7 +34,14 @@ func (h *Handler) GetUserAvatar(w http.ResponseWriter, r *http.Request) {
 
 // GetAvatar возвращает аватарку.
 func (h *Handler) GetAvatar(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("avatar_id")
+	id := chi.URLParam(r, "avatar_id")
+	if id == "" {
+		h.writeJSON(w, http.StatusBadRequest, models.ErrorResponse{
+			Error:   "Empty avatarID",
+			Details: "avatar_id path parameter is required",
+		})
+		return
+	}
 	size := r.URL.Query().Get("size")
 	format := r.URL.Query().Get("format")
 	meta, imageData, err := h.service.GetAvatar(r.Context(), id, size, format)

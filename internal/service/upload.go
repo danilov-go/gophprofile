@@ -29,8 +29,8 @@ func (s *Service) SaveAvatar(ctx context.Context, imageData []byte, userID, file
 		MimeType:         mimeType,
 		SizeBytes:        int64(len(imageData)),
 		Dimensions:       dimensions,
-		ProcessingStatus: "processing",
-		UploadStatus:     "uploaded",
+		ProcessingStatus: models.StatusProcessing,
+		UploadStatus:     models.UploadStatusUploaded,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}

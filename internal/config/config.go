@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/caarlos0/env/v11"
 )
@@ -53,6 +54,8 @@ func (c *ConfigServer) Parse() error {
 
 // ConfigServer описывает настройки воркера.
 type ConfigWorker struct {
+	MaxRetries int           `env:"MAX_RETRIES"    envDefault:"3"`
+	RetryDelay time.Duration `env:"WORKER_RETRY_DELAY" envDefault:"500ms"`
 	BaseConfig
 }
 

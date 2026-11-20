@@ -7,42 +7,25 @@ import (
 	"time"
 )
 
-// MaxSize определяет максимальный размер аватарки.
+// ProcessingStatus представляет статус фоновой обработки аватарки.
+type ProcessingStatus string
+
+// Поддерживаемые статусы обработки аватарок.
 const (
-	MaxSize = 10 << 20
+	StatusPending    ProcessingStatus = "pending"
+	StatusProcessing ProcessingStatus = "processing"
+	StatusCompleted  ProcessingStatus = "completed"
+	StatusFailed     ProcessingStatus = "failed"
 )
 
-// SizeAvatar представляет доступные размеры аватарок.
-type SizeAvatar string
+// UploadStatus представляет статус загрузки файла в хранилище.
+type UploadStatus string
 
-// Поддерживаемых размеры аватарок.
+// Поддерживаемые статусы загрузки аватарок.
 const (
-	SizeSmall    SizeAvatar = "100x100"
-	SizeMedium   SizeAvatar = "300x300"
-	SizeOriginal SizeAvatar = "original"
+	UploadStatusUploading UploadStatus = "uploading"
+	UploadStatusUploaded  UploadStatus = "uploaded"
 )
-
-// Dimensions определяет ширину и высоту аватари в пикселях.
-type Dimensions struct {
-	Width  int `json:"width"`
-	Height int `json:"height"`
-}
-
-// Thumbnail определяет размер и URL-адрес миниатюры аватарки.
-type Thumbnail struct {
-	Size string `json:"size"`
-	URL  string `json:"url"`
-}
-
-type ThumbnailData struct {
-	Size SizeAvatar
-	Data []byte
-}
-
-var Targets = map[SizeAvatar]Dimensions{
-	SizeSmall:  {Width: 100, Height: 100},
-	SizeMedium: {Width: 300, Height: 300},
-}
 
 // Ошибки бизнес логики при работе с аватарками.
 var (
@@ -63,8 +46,8 @@ type Avatar struct {
 	Dimensions       Dimensions            `json:"dimensions"`
 	S3Key            string                `json:"-"`
 	ThumbnailS3Keys  map[SizeAvatar]string `json:"-"`
-	UploadStatus     string                `json:"upload_status"`
-	ProcessingStatus string                `json:"processing_status"`
+	UploadStatus     UploadStatus          `json:"upload_status"`
+	ProcessingStatus ProcessingStatus      `json:"processing_status"`
 	CreatedAt        time.Time             `json:"created_at"`
 	UpdatedAt        time.Time             `json:"updated_at"`
 	DeletedAt        *time.Time            `json:"deleted_at,omitempty"`
@@ -78,16 +61,4 @@ func (a *Avatar) GenerateS3Key(ext string) {
 // GenerateThumbnailS3Key формирует ключ миниатюры для хранения в S3.
 func GenerateThumbnailS3Key(avatarID string, size SizeAvatar) string {
 	return fmt.Sprintf("thumbnails/%s/%s.jpg", avatarID, size)
-}
-
-var mimeToExt = map[string]string{
-	"image/jpeg": ".jpg",
-	"image/png":  ".png",
-	"image/webp": ".webp",
-}
-
-// GetExt возвращает расширение аватарки по ее MIME-типу.
-func GetExt(mimeType string) (string, bool) {
-	ext, ok := mimeToExt[mimeType]
-	return ext, ok
 }

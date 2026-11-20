@@ -17,7 +17,7 @@ func (s *Service) PublishUploadEvent(ctx context.Context, avatarID, userID, s3Ke
 	if err != nil {
 		return err
 	}
-	return s.producer.Send(ctx, avatarID, "upload", eventBytes)
+	return s.producer.Send(ctx, avatarID, models.EventTypeUpload, eventBytes)
 }
 
 func (s *Service) PublishDeleteEvent(ctx context.Context, avatarID string, s3Keys []string) error {
@@ -29,5 +29,5 @@ func (s *Service) PublishDeleteEvent(ctx context.Context, avatarID string, s3Key
 	if err != nil {
 		return err
 	}
-	return s.producer.Send(ctx, avatarID, "delete", eventBytes)
+	return s.producer.Send(ctx, avatarID, models.EventTypeDelete, eventBytes)
 }

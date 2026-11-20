@@ -1,5 +1,13 @@
 package models
 
+type EventType string
+
+const (
+	EventTypeHeader           = "event_type"
+	EventTypeUpload EventType = "upload"
+	EventTypeDelete EventType = "delete"
+)
+
 type AvatarUploadEvent struct {
 	AvatarID string `json:"avatar_id"`
 	UserID   string `json:"user_id"`
