@@ -10,6 +10,7 @@ import (
 	"github.com/danilov-go/gophprofile/internal/broker"
 	"github.com/danilov-go/gophprofile/internal/config"
 	"github.com/danilov-go/gophprofile/internal/handler"
+	"github.com/danilov-go/gophprofile/internal/imaging"
 	"github.com/danilov-go/gophprofile/internal/logger"
 	"github.com/danilov-go/gophprofile/internal/repository/db"
 	"github.com/danilov-go/gophprofile/internal/repository/s3"
@@ -59,16 +60,21 @@ func run() error {
 		return err
 	}
 	defer func() { _ = producer.Close() }()
-	srvc := service.NewService(storageDB, clientS3, producer)
+	converter := imaging.NewConverter()
+	srvc := service.NewService(storageDB, clientS3, producer, converter)
 	h := handler.NewHandler(srvc, logger.Log.Sugar(), cfg.WebPath)
 	g, gCtx := errgroup.WithContext(ctx)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /web/upload", h.GetForm)
-	mux.HandleFunc("POST /api/v1/avatars", h.APIUploadHandler)
-	mux.HandleFunc("GET /api/v1/avatars/{avatar_id}", h.APIGetAvatarHandler)
-	mux.HandleFunc("GET /api/v1/avatars/{avatar_id}/metadata", h.APIGetMetaDataHandler)
-	mux.HandleFunc("DELETE /api/v1/avatars/{avatar_id}", h.APIDeleteAvatarHandler)
-	mux.HandleFunc("GET /health", h.HealthHandler)
+	mux.HandleFunc("GET /web/gallery/{user_id}", h.GetGallery)
+	mux.HandleFunc("POST /api/v1/avatars", h.UploadAvatar)
+	mux.HandleFunc("GET /api/v1/avatars/{avatar_id}", h.GetAvatar)
+	mux.HandleFunc("GET /api/v1/users/{user_id}/avatar", h.GetUserAvatar)
+	mux.HandleFunc("GET /api/v1/users/{user_id}/avatars", h.GetUserAvatars)
+	mux.HandleFunc("GET /api/v1/avatars/{avatar_id}/metadata", h.GetAvatarMetadata)
+	mux.HandleFunc("DELETE /api/v1/avatars/{avatar_id}", h.DeleteAvatar)
+	mux.HandleFunc("DELETE /api/v1/users/{user_id}/avatar", h.DeleteUserAvatar)
+	mux.HandleFunc("GET /health", h.Health)
 	serv := server.New(cfg.Net, logger.Log.Sugar(), mux)
 	g.Go(func() error {
 		logger.Log.Sugar().Info("Сервер запущен по протоколу HTTP на ", cfg.Net)

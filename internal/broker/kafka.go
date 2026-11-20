@@ -2,11 +2,13 @@ package broker
 
 import (
 	"context"
+	"errors"
 
 	"github.com/IBM/sarama"
 )
 
 type Producer struct {
+	client       sarama.Client
 	syncProducer sarama.SyncProducer
 	topic        string
 }
@@ -14,11 +16,16 @@ type Producer struct {
 func NewProducer(addrs []string, topic string) (*Producer, error) {
 	cfg := sarama.NewConfig()
 	cfg.Producer.Return.Successes = true
+	client, err := sarama.NewClient(addrs, cfg)
+	if err != nil {
+		return nil, err
+	}
 	p, err := sarama.NewSyncProducer(addrs, cfg)
 	if err != nil {
 		return nil, err
 	}
 	return &Producer{
+		client:       client,
 		syncProducer: p,
 		topic:        topic,
 	}, nil
@@ -43,6 +50,13 @@ func (p *Producer) Send(ctx context.Context, key, eventType string, eventBytes [
 	return err
 }
 
+func (p *Producer) Ping(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return p.client.RefreshMetadata(p.topic)
+}
+
 func (p *Producer) Close() error {
-	return p.syncProducer.Close()
+	return errors.Join(p.syncProducer.Close(), p.client.Close())
 }

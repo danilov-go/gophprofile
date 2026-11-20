@@ -47,6 +47,7 @@ var Targets = map[SizeAvatar]Dimensions{
 // Ошибки бизнес логики при работе с аватарками.
 var (
 	ErrInvalidFormat   = errors.New("invalid file format")
+	ErrInvalidSize     = errors.New("invalid size")
 	ErrFileTooLarge    = errors.New("file too large")
 	ErraAvatarNotFound = errors.New("avatar not found")
 	ErrForbidden       = errors.New("forbidden")

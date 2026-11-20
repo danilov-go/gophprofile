@@ -3,32 +3,28 @@ package imaging
 import (
 	"bytes"
 	"image"
-	"image/jpeg"
-	_ "image/png"
 
 	"github.com/danilov-go/gophprofile/internal/models"
-	"golang.org/x/image/draw"
-	_ "golang.org/x/image/webp"
+	"github.com/deepteams/webp"
+	"github.com/disintegration/imaging"
 )
 
 type Resizer struct{}
 
-func New() *Resizer {
+func NewResizer() *Resizer {
 	return &Resizer{}
 }
 
 func (r *Resizer) Resize(imageData []byte) ([]models.ThumbnailData, error) {
-	img, _, err := image.Decode(bytes.NewReader(imageData))
+	img, err := imaging.Decode(bytes.NewReader(imageData), imaging.AutoOrientation(true))
 	if err != nil {
-		return nil, err
+		return nil, models.ErrInvalidFormat
 	}
-	var thumbnailData []models.ThumbnailData
+	thumbnailData := make([]models.ThumbnailData, 0, len(models.Targets))
 	for size, target := range models.Targets {
-		imgRect := image.Rect(0, 0, target.Width, target.Height)
-		imgRGBA := image.NewRGBA(imgRect)
-		draw.CatmullRom.Scale(imgRGBA, imgRect, img, img.Bounds(), draw.Over, nil)
+		thumb := imaging.Fill(img, target.Width, target.Height, imaging.Center, imaging.Lanczos)
 		var buf bytes.Buffer
-		if err := jpeg.Encode(&buf, imgRGBA, &jpeg.Options{Quality: 85}); err != nil {
+		if err := imaging.Encode(&buf, thumb, imaging.JPEG, imaging.JPEGQuality(85)); err != nil {
 			return nil, err
 		}
 		thumbnailData = append(thumbnailData, models.ThumbnailData{
@@ -37,4 +33,53 @@ func (r *Resizer) Resize(imageData []byte) ([]models.ThumbnailData, error) {
 		})
 	}
 	return thumbnailData, nil
+}
+
+type Converter struct{}
+
+func NewConverter() *Converter {
+	return &Converter{}
+}
+
+func (r *Converter) Convert(imageData []byte, format string) ([]byte, string, error) {
+	if format == "" {
+		return nil, "", models.ErrInvalidFormat
+	}
+	img, err := imaging.Decode(bytes.NewReader(imageData), imaging.AutoOrientation(true))
+	if err != nil {
+		return nil, "", models.ErrInvalidFormat
+	}
+	var buf bytes.Buffer
+	switch format {
+	case "jpeg":
+		if err := imaging.Encode(&buf, img, imaging.JPEG, imaging.JPEGQuality(85)); err != nil {
+			return nil, "", err
+		}
+		return buf.Bytes(), "image/jpeg", nil
+
+	case "png":
+		if err := imaging.Encode(&buf, img, imaging.PNG); err != nil {
+			return nil, "", err
+		}
+		return buf.Bytes(), "image/png", nil
+
+	case "webp":
+		if err := webp.Encode(&buf, img, &webp.EncoderOptions{Quality: 80}); err != nil {
+			return nil, "", err
+		}
+		return buf.Bytes(), "image/webp", nil
+	default:
+		return nil, "", models.ErrInvalidFormat
+	}
+}
+
+func (c *Converter) GetDimensions(imageData []byte) (models.Dimensions, error) {
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(imageData))
+	if err != nil {
+		return models.Dimensions{}, models.ErrInvalidFormat
+	}
+	return models.Dimensions{
+		Width:  cfg.Width,
+		Height: cfg.Height,
+	}, nil
 }

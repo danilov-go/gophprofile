@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Avatar Gallery</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          }
+        }
+      }
+    }
+  </script>
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
+  <div class="container mx-auto px-4 py-8 max-w-4xl">
+    <div class="bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl border border-white/20 overflow-hidden">
+      <header class="bg-gradient-to-r from-purple-600 to-blue-600 p-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div class="text-center sm:text-left">
+          <h1 class="text-3xl font-bold text-white">User Avatar Gallery</h1>
+          <p id="userSubtitle" class="text-white/80 mt-1 font-mono text-sm"></p>
+        </div>
+        <a id="uploadLink" href="/web/upload"
+          class="bg-white/20 hover:bg-white/30 text-white font-semibold py-2.5 px-5 rounded-lg shadow-lg focus:outline-none focus:ring-2 focus:ring-white/50 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] text-sm">
+          Upload New
+        </a>
+      </header>
+
+      <main class="p-6 space-y-6">
+        <div id="loader" class="text-center py-12 text-white/80 animate-pulse-slow">
+          <svg width="32" height="32" class="animate-spin h-8 w-8 text-purple-400 mx-auto mb-3" xmlns="http://w3.org"
+            fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+            </path>
+          </svg>
+          Loading avatars...
+        </div>
+
+        <div id="error" class="hidden bg-red-500/20 border border-red-500/50 text-red-200 px-4 py-3 rounded-lg text-sm"></div>
+
+        <div id="galleryGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6"></div>
+      </main>
+    </div>
+  </div>
+
+    <script>
+    const userSubtitle = document.getElementById('userSubtitle');
+    const uploadLink = document.getElementById('uploadLink');
+    const loader = document.getElementById('loader');
+    const errorBox = document.getElementById('error');
+    const grid = document.getElementById('galleryGrid');
+    const userId = decodeURIComponent(window.location.pathname.split('/').filter(Boolean).pop());
+    userSubtitle.textContent = `User ID: ${userId}`;
+    uploadLink.href = `/web/upload?user_id=${encodeURIComponent(userId)}`;
+
+    function buildAvatarUrl(avatarId, size, format) {
+      const params = new URLSearchParams();
+      if (size && size !== 'original') params.set('size', size);
+      if (format && format !== 'original') params.set('format', format);
+      const query = params.toString();
+      return `/api/v1/avatars/${encodeURIComponent(avatarId)}${query ? '?' + query : ''}`;
+    }
+
+    async function loadGallery() {
+      try {
+        const res = await fetch(`/api/v1/users/${encodeURIComponent(userId)}/avatars`);
+        loader.classList.add('hidden');
+        grid.innerHTML = '';
+
+        if (res.status === 404) {
+          renderEmpty();
+          return;
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const avatars = await res.json();
+        if (!avatars || avatars.length === 0) {
+          renderEmpty();
+          return;
+        }
+
+        avatars.forEach(av => {
+          const defaultThumb = av.thumbnails?.find(t => t.size === '300x300')?.url || buildAvatarUrl(av.id, 'original', 'original');
+
+          const card = document.createElement('div');
+          card.className = 'bg-white/10 border border-white/20 rounded-xl p-4 shadow-lg flex flex-col items-center space-y-3 transition-all duration-200 hover:bg-white/[0.14]';
+
+          const imgWrapper = document.createElement('div');
+          imgWrapper.className = 'w-40 h-40 rounded-lg overflow-hidden shadow-lg bg-black/30 border border-white/10 flex items-center justify-center';
+
+          const img = document.createElement('img');
+          img.src = defaultThumb;
+          img.alt = av.file_name || 'Avatar';
+          img.className = 'w-full h-full object-cover';
+          img.onerror = () => {
+            const fallbackUrl = buildAvatarUrl(av.id, 'original', 'original');
+            if (img.src !== window.location.origin + fallbackUrl) {
+              img.src = fallbackUrl;
+            }
+          };
+          imgWrapper.appendChild(img);
+
+          const title = document.createElement('div');
+          title.className = 'text-xs font-medium text-white/90 text-center w-full truncate';
+          title.textContent = av.file_name || av.id;
+
+          const controls = document.createElement('div');
+          controls.className = 'grid grid-cols-2 gap-2 w-full';
+
+          const selectClass = 'bg-white/10 border border-white/20 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all cursor-pointer';
+
+          const sizeSelect = document.createElement('select');
+          sizeSelect.className = selectClass;
+          [
+            { value: 'original', label: 'Size: Original' },
+            { value: '300x300', label: 'Size: 300x300' },
+            { value: '100x100', label: 'Size: 100x100' }
+          ].forEach(opt => {
+            const o = document.createElement('option');
+            o.value = opt.value;
+            o.textContent = opt.label;
+            o.className = 'bg-slate-900 text-white';
+            sizeSelect.appendChild(o);
+          });
+
+          const formatSelect = document.createElement('select');
+          formatSelect.className = selectClass;
+          [
+            { value: 'original', label: 'Fmt: Original' },
+            { value: 'jpeg', label: 'Fmt: JPEG' },
+            { value: 'png', label: 'Fmt: PNG' },
+            { value: 'webp', label: 'Fmt: WebP' }
+          ].forEach(opt => {
+            const o = document.createElement('option');
+            o.value = opt.value;
+            o.textContent = opt.label;
+            o.className = 'bg-slate-900 text-white';
+            formatSelect.appendChild(o);
+          });
+
+          controls.append(sizeSelect, formatSelect);
+
+          const actions = document.createElement('div');
+          actions.className = 'flex space-x-2 w-full pt-1';
+
+          const viewBtn = document.createElement('a');
+          viewBtn.href = buildAvatarUrl(av.id, 'original', 'original');
+          viewBtn.target = '_blank';
+          viewBtn.className = 'flex-1 text-center bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold py-2 px-3 rounded-lg shadow-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] text-xs';
+          viewBtn.textContent = 'Open';
+
+          const updateLinks = () => {
+            const newUrl = buildAvatarUrl(av.id, sizeSelect.value, formatSelect.value);
+            viewBtn.href = newUrl;
+            img.src = newUrl;
+          };
+
+          sizeSelect.addEventListener('change', updateLinks);
+          formatSelect.addEventListener('change', updateLinks);
+
+          const delBtn = document.createElement('button');
+          delBtn.className = 'flex-1 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-semibold py-2 px-3 rounded-lg shadow-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] text-xs';
+          delBtn.textContent = 'Delete';
+          delBtn.onclick = () => deleteAvatar(av.id, delBtn);
+
+          actions.append(viewBtn, delBtn);
+          card.append(imgWrapper, title, controls, actions);
+          grid.appendChild(card);
+        });
+      } catch (err) {
+        loader.classList.add('hidden');
+        errorBox.textContent = `Failed to load gallery: ${err.message}`;
+        errorBox.classList.remove('hidden');
+      }
+    }
+
+    function renderEmpty() {
+      const emptyBox = document.createElement('div');
+      emptyBox.className = 'col-span-full bg-black/20 border border-white/10 rounded-xl py-12 px-4 text-center';
+      
+      const emptyMsg = document.createElement('p');
+      emptyMsg.className = 'text-white/70 text-sm';
+      emptyMsg.textContent = 'No avatars found for this user.';
+      
+      emptyBox.appendChild(emptyMsg);
+      grid.appendChild(emptyBox);
+    }
+
+    async function deleteAvatar(avatarId, btn) {
+      if (!confirm('Delete this avatar?')) return;
+      btn.disabled = true;
+      btn.textContent = '...';
+
+      try {
+        const res = await fetch(`/api/v1/avatars/${encodeURIComponent(avatarId)}`, {
+          method: 'DELETE',
+          headers: { 'X-User-ID': userId }
+        });
+
+        if (res.ok) {
+          loadGallery();
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          alert(errData.details || errData.error || 'Failed to delete avatar');
+          btn.disabled = false;
+          btn.textContent = 'Delete';
+        }
+      } catch (err) {
+        alert(`Network error: ${err.message}`);
+        btn.disabled = false;
+        btn.textContent = 'Delete';
+      }
+    }
+
+    loadGallery();
+  </script>
+
+</body>
+
+</html>

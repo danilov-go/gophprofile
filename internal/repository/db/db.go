@@ -136,7 +136,7 @@ func (s *storageDB) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// UpdateProcessingStatus обновляет статус обработки аватарки и ключи миниатюр в БД.
+// UpdateProcessingStatus обновляет статус обработки аватарки и ключи миниатюр в базе данных.
 func (s *storageDB) UpdateProcessingStatus(ctx context.Context, id, status string, thumbnailKeys map[models.SizeAvatar]string) error {
 	var thumbs []byte
 	var err error
@@ -175,4 +175,79 @@ func (s *storageDB) Close() error {
 // Ping проверяет доступность хранилища.
 func (s *storageDB) Ping(ctx context.Context) error {
 	return s.db.PingContext(ctx)
+}
+
+// GetByUserID возвращает актуальную аватарку пользователя из базы данных.
+func (s *storageDB) GetByUserID(ctx context.Context, userID string) (models.Avatar, error) {
+	query := `
+		SELECT id, user_id, file_name, mime_type, size_bytes, width, height, 
+		s3_key, thumbnail_s3_keys, upload_status, processing_status, created_at, 
+		updated_at, deleted_at FROM avatars WHERE user_id = $1 AND deleted_at IS NULL
+		ORDER BY created_at DESC LIMIT 1
+	`
+	var meta models.Avatar
+	var thumbs []byte
+	var deletedAt sql.NullTime
+	err := s.db.QueryRowContext(ctx, query, userID).Scan(
+		&meta.ID, &meta.UserID, &meta.FileName, &meta.MimeType, &meta.SizeBytes,
+		&meta.Dimensions.Width, &meta.Dimensions.Height, &meta.S3Key, &thumbs,
+		&meta.UploadStatus, &meta.ProcessingStatus, &meta.CreatedAt, &meta.UpdatedAt, &deletedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.Avatar{}, models.ErraAvatarNotFound
+		}
+		return models.Avatar{}, err
+	}
+	if len(thumbs) > 0 {
+		if err := json.Unmarshal(thumbs, &meta.ThumbnailS3Keys); err != nil {
+			return models.Avatar{}, err
+		}
+	}
+	if deletedAt.Valid {
+		meta.DeletedAt = &deletedAt.Time
+	}
+	return meta, nil
+}
+
+// GetAllByUserID возвращает список всех аватарок пользователя из базы данных.
+func (s *storageDB) GetAllByUserID(ctx context.Context, userID string) ([]models.Avatar, error) {
+	query := `
+		SELECT id, user_id, file_name, mime_type, size_bytes, width, height, 
+		s3_key, thumbnail_s3_keys, upload_status, processing_status, created_at, 
+		updated_at, deleted_at FROM avatars WHERE user_id = $1 AND deleted_at IS NULL
+		ORDER BY created_at DESC
+	`
+	rows, err := s.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var avatars []models.Avatar
+	for rows.Next() {
+		var meta models.Avatar
+		var thumbs []byte
+		var deletedAt sql.NullTime
+		err := rows.Scan(
+			&meta.ID, &meta.UserID, &meta.FileName, &meta.MimeType, &meta.SizeBytes,
+			&meta.Dimensions.Width, &meta.Dimensions.Height, &meta.S3Key, &thumbs,
+			&meta.UploadStatus, &meta.ProcessingStatus, &meta.CreatedAt, &meta.UpdatedAt, &deletedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if len(thumbs) > 0 {
+			if err := json.Unmarshal(thumbs, &meta.ThumbnailS3Keys); err != nil {
+				return nil, err
+			}
+		}
+		if deletedAt.Valid {
+			meta.DeletedAt = &deletedAt.Time
+		}
+		avatars = append(avatars, meta)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return avatars, nil
 }

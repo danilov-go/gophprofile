@@ -42,7 +42,7 @@ func PrintBuild(w io.Writer, version, date, commit string) {
 // ConfigServer определяет настройки сервера.
 type ConfigServer struct {
 	Net     string `env:"ADDRESS"  envDefault:"0.0.0.0:8080"`
-	WebPath string `env:"WEB_PATH" envDefault:"./web/static/index.html"`
+	WebPath string `env:"WEB_PATH" envDefault:"./web/static"`
 	BaseConfig
 }
 
