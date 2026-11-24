@@ -32,7 +32,9 @@ services:
       - kafka_data:/tmp/kraft-combined-logs
 
   server:
-    build: .
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
     command: ["./server"]
     restart: on-failure
     ports:
@@ -43,7 +45,9 @@ services:
       - minio
   
   worker:
-    build: .
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
     command: ["./worker"]
     restart: on-failure
     env_file: .env
