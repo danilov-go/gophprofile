@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/IBM/sarama"
+
 	"github.com/danilov-go/gophprofile/internal/models"
 )
 

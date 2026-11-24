@@ -35,16 +35,17 @@ type KafkaConfig struct {
 
 // PrintBuild выводит в консоль информацию о текущей сборке приложения.
 func PrintBuild(w io.Writer, version, date, commit string) {
-	fmt.Fprintf(w, "Build version: %s\n", version)
-	fmt.Fprintf(w, "Build date: %s\n", date)
-	fmt.Fprintf(w, "Build commit: %s\n", commit)
+	_, _ = fmt.Fprintf(w, "Build version: %s\n", version)
+	_, _ = fmt.Fprintf(w, "Build date: %s\n", date)
+	_, _ = fmt.Fprintf(w, "Build commit: %s\n", commit)
 }
 
 // ConfigServer определяет настройки сервера.
 type ConfigServer struct {
+	BaseConfig
+
 	Net     string `env:"ADDRESS"  envDefault:"0.0.0.0:8080"`
 	WebPath string `env:"WEB_PATH" envDefault:"./web/static"`
-	BaseConfig
 }
 
 // Parse парсит конфигурацию сервера.
@@ -54,9 +55,10 @@ func (c *ConfigServer) Parse() error {
 
 // ConfigServer описывает настройки воркера.
 type ConfigWorker struct {
+	BaseConfig
+
 	MaxRetries int           `env:"MAX_RETRIES"    envDefault:"3"`
 	RetryDelay time.Duration `env:"WORKER_RETRY_DELAY" envDefault:"500ms"`
-	BaseConfig
 }
 
 // Parse парсит конфигурацию воркера.

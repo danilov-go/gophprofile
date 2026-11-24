@@ -26,7 +26,7 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 			Error:   "File too large",
 			MaxSize: models.MaxSize,
 		})
-	case errors.Is(err, models.ErraAvatarNotFound):
+	case errors.Is(err, models.ErrAvatarNotFound):
 		h.writeJSON(w, http.StatusNotFound, models.ErrorResponse{
 			Error: "Avatar not found",
 		})

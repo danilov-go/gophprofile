@@ -4,15 +4,16 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/danilov-go/gophprofile/internal/models"
 	"github.com/go-chi/chi/v5"
+
+	"github.com/danilov-go/gophprofile/internal/models"
 )
 
 type UserHandlerFunc func(w http.ResponseWriter, r *http.Request, userID string)
 
 func (h *Handler) ValidateUserID(next UserHandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		headerUserID := strings.TrimSpace(r.Header.Get("X-User-ID"))
+		headerUserID := strings.TrimSpace(r.Header.Get("X-User-Id"))
 		if headerUserID == "" || len(headerUserID) > 255 {
 			h.writeJSON(w, http.StatusBadRequest, models.ErrorResponse{
 				Error:   "Invalid userID",

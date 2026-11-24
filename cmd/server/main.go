@@ -8,6 +8,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/httprate"
+	"github.com/rs/cors"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/danilov-go/gophprofile/internal/broker"
 	"github.com/danilov-go/gophprofile/internal/config"
 	"github.com/danilov-go/gophprofile/internal/handler"
@@ -17,11 +23,6 @@ import (
 	"github.com/danilov-go/gophprofile/internal/repository/s3"
 	"github.com/danilov-go/gophprofile/internal/server"
 	"github.com/danilov-go/gophprofile/internal/service"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/httprate"
-	"github.com/rs/cors"
-	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -104,7 +105,7 @@ func run() error {
 	g.Go(func() error {
 		<-gCtx.Done()
 		logger.Log.Sugar().Info("Остановка HTTP сервера...")
-		return serv.Stop()
+		return serv.Stop(ctx)
 	})
 	if err := g.Wait(); err != nil {
 		logger.Log.Sugar().Errorw("сервер аварийно завершил работу", "err", err)

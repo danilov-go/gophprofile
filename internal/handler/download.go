@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"bytes"
 	"net/http"
+	"time"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/danilov-go/gophprofile/internal/models"
-	"github.com/go-chi/chi/v5"
 )
 
 // GetUserAvatar возвращает текущую аватарку пользователя.
@@ -26,10 +29,7 @@ func (h *Handler) GetUserAvatar(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", meta.MimeType)
 	w.Header().Set("Cache-Control", "max-age=86400")
-	w.WriteHeader(http.StatusOK)
-	if _, err = w.Write(imageData); err != nil {
-		h.logger.Errorw("ошибка записи тела ответа", "error", err)
-	}
+	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(imageData))
 }
 
 // GetAvatar возвращает аватарку.
@@ -51,8 +51,5 @@ func (h *Handler) GetAvatar(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", meta.MimeType)
 	w.Header().Set("Cache-Control", "max-age=86400")
-	w.WriteHeader(http.StatusOK)
-	if _, err = w.Write(imageData); err != nil {
-		h.logger.Errorw("ошибка записи тела ответа", "error", err)
-	}
+	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(imageData))
 }

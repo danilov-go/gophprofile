@@ -41,7 +41,7 @@ func (m *MemStorageS3) Download(ctx context.Context, s3Key string) ([]byte, erro
 	defer m.mu.RUnlock()
 	imageData, ok := m.image[s3Key]
 	if !ok {
-		return nil, models.ErraAvatarNotFound
+		return nil, models.ErrAvatarNotFound
 	}
 	return bytes.Clone(imageData), nil
 }

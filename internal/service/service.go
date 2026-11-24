@@ -25,11 +25,13 @@ type S3 interface {
 	Ping(ctx context.Context) error
 }
 
+// Producer определяет методы отправки событий в брокер сообщений.
 type Producer interface {
 	Send(ctx context.Context, key string, eventType models.EventType, eventBytes []byte) error
 	Ping(ctx context.Context) error
 }
 
+// Converter определяет методы конвертации изображений и получения их размеров.
 type Converter interface {
 	Convert(imageData []byte, format string) ([]byte, string, error)
 	GetDimensions(imageData []byte) (models.Dimensions, error)

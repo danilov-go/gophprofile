@@ -4,8 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/danilov-go/gophprofile/internal/models"
 	"github.com/google/uuid"
+
+	"github.com/danilov-go/gophprofile/internal/models"
 )
 
 // SaveAvatar загружает аватарку в S3 и сохраняет метаданные в хранилище.

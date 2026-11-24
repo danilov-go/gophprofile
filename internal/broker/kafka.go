@@ -1,18 +1,22 @@
+// Package broker реализует взаимодействие с брокером сообщений Kafka.
 package broker
 
 import (
 	"context"
 
 	"github.com/IBM/sarama"
+
 	"github.com/danilov-go/gophprofile/internal/models"
 )
 
+// Producer отправляет события в Kafka.
 type Producer struct {
 	client       sarama.Client
 	syncProducer sarama.SyncProducer
 	topic        string
 }
 
+// NewProducer создает новый экземпляр Producer.
 func NewProducer(addrs []string, topic string) (*Producer, error) {
 	config := sarama.NewConfig()
 	config.Producer.RequiredAcks = sarama.WaitForAll
@@ -35,6 +39,7 @@ func NewProducer(addrs []string, topic string) (*Producer, error) {
 	}, nil
 }
 
+// Send публикует сообщение с указанным ключом и типом события в Kafka.
 func (p *Producer) Send(ctx context.Context, key string, eventType models.EventType, eventBytes []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -54,6 +59,7 @@ func (p *Producer) Send(ctx context.Context, key string, eventType models.EventT
 	return err
 }
 
+// Ping проверяет доступность брокера.
 func (p *Producer) Ping(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -61,6 +67,7 @@ func (p *Producer) Ping(ctx context.Context) error {
 	return p.client.RefreshMetadata(p.topic)
 }
 
+// Close закрывает продюсер и клиентское соединение с Kafka.
 func (p *Producer) Close() error {
 	errProd := p.syncProducer.Close()
 	errClient := p.client.Close()

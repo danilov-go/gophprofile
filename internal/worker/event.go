@@ -7,6 +7,7 @@ import (
 	"github.com/danilov-go/gophprofile/internal/models"
 )
 
+// HandleUploadEvent обрабатывает событие загрузки аватарки.
 func (w *Worker) HandleUploadEvent(ctx context.Context, event models.AvatarUploadEvent) error {
 	meta, err := w.repo.Get(ctx, event.AvatarID)
 	if err != nil {
@@ -36,6 +37,7 @@ func (w *Worker) HandleUploadEvent(ctx context.Context, event models.AvatarUploa
 	return w.repo.UpdateProcessingStatus(ctx, event.AvatarID, models.StatusCompleted, thumbKeys)
 }
 
+// HandleDeleteEvent обрабатывает событие удаления аватарки.
 func (w *Worker) HandleDeleteEvent(ctx context.Context, event models.AvatarDeleteEvent) error {
 	for _, key := range event.S3Keys {
 		if key == "" {

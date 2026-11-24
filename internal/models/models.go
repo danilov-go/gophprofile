@@ -29,11 +29,11 @@ const (
 
 // Ошибки бизнес логики при работе с аватарками.
 var (
-	ErrInvalidFormat   = errors.New("invalid file format")
-	ErrInvalidSize     = errors.New("invalid size")
-	ErrFileTooLarge    = errors.New("file too large")
-	ErraAvatarNotFound = errors.New("avatar not found")
-	ErrForbidden       = errors.New("forbidden")
+	ErrInvalidFormat  = errors.New("invalid file format")
+	ErrInvalidSize    = errors.New("invalid size")
+	ErrFileTooLarge   = errors.New("file too large")
+	ErrAvatarNotFound = errors.New("avatar not found")
+	ErrForbidden      = errors.New("forbidden")
 )
 
 // Avatar определяет метаданные аватарки.

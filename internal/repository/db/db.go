@@ -8,11 +8,12 @@ import (
 	"errors"
 	"time"
 
-	"github.com/danilov-go/gophprofile/internal/models"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/jackc/pgx/v5/stdlib"
+
+	"github.com/danilov-go/gophprofile/internal/models"
 )
 
 type storageDB struct {
@@ -103,7 +104,7 @@ func (s *storageDB) Get(ctx context.Context, id string) (models.Avatar, error) {
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return models.Avatar{}, models.ErraAvatarNotFound
+			return models.Avatar{}, models.ErrAvatarNotFound
 		}
 		return models.Avatar{}, err
 	}
@@ -131,7 +132,7 @@ func (s *storageDB) Delete(ctx context.Context, id string) error {
 		return err
 	}
 	if rows == 0 {
-		return models.ErraAvatarNotFound
+		return models.ErrAvatarNotFound
 	}
 	return nil
 }
@@ -162,7 +163,7 @@ func (s *storageDB) UpdateProcessingStatus(ctx context.Context, id string, statu
 		return err
 	}
 	if rows == 0 {
-		return models.ErraAvatarNotFound
+		return models.ErrAvatarNotFound
 	}
 	return nil
 }
@@ -195,7 +196,7 @@ func (s *storageDB) GetByUserID(ctx context.Context, userID string) (models.Avat
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return models.Avatar{}, models.ErraAvatarNotFound
+			return models.Avatar{}, models.ErrAvatarNotFound
 		}
 		return models.Avatar{}, err
 	}
@@ -222,7 +223,7 @@ func (s *storageDB) GetAllByUserID(ctx context.Context, userID string) ([]models
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var avatars []models.Avatar
 	for rows.Next() {
 		var meta models.Avatar

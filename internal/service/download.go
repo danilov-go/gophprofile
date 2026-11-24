@@ -3,8 +3,9 @@ package service
 import (
 	"context"
 
-	"github.com/danilov-go/gophprofile/internal/models"
 	"github.com/google/uuid"
+
+	"github.com/danilov-go/gophprofile/internal/models"
 )
 
 // GetAvatar возвращает метаданные и файл аватарки.
@@ -36,7 +37,7 @@ func (s *Service) loadAvatar(ctx context.Context, meta models.Avatar, size, form
 		}
 		thumbKey, ok := meta.ThumbnailS3Keys[avatarSize]
 		if !ok || thumbKey == "" {
-			return models.Avatar{}, nil, models.ErraAvatarNotFound
+			return models.Avatar{}, nil, models.ErrAvatarNotFound
 		}
 		key = thumbKey
 		meta.MimeType = "image/jpeg"
@@ -63,7 +64,7 @@ func (s *Service) loadAvatar(ctx context.Context, meta models.Avatar, size, form
 
 func (s *Service) getAvatar(ctx context.Context, id string) (models.Avatar, error) {
 	if _, err := uuid.Parse(id); err != nil {
-		return models.Avatar{}, models.ErraAvatarNotFound
+		return models.Avatar{}, models.ErrAvatarNotFound
 	}
 	return s.storage.Get(ctx, id)
 }

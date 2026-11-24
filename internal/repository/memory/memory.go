@@ -43,7 +43,7 @@ func (m *MemStorage) Get(ctx context.Context, id string) (models.Avatar, error) 
 	defer m.mu.RUnlock()
 	meta, ok := m.metaData[id]
 	if !ok || meta.DeletedAt != nil {
-		return models.Avatar{}, models.ErraAvatarNotFound
+		return models.Avatar{}, models.ErrAvatarNotFound
 	}
 	return meta, nil
 }
@@ -57,7 +57,7 @@ func (m *MemStorage) Delete(ctx context.Context, id string) error {
 	defer m.mu.Unlock()
 	meta, ok := m.metaData[id]
 	if !ok || meta.DeletedAt != nil {
-		return models.ErraAvatarNotFound
+		return models.ErrAvatarNotFound
 	}
 	now := time.Now().UTC()
 	meta.DeletedAt = &now
@@ -101,7 +101,7 @@ func (m *MemStorage) GetByUserID(ctx context.Context, userID string) (models.Ava
 		}
 	}
 	if !found {
-		return models.Avatar{}, models.ErraAvatarNotFound
+		return models.Avatar{}, models.ErrAvatarNotFound
 	}
 	return latest, nil
 }

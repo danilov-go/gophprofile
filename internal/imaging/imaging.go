@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"image"
 
-	"github.com/danilov-go/gophprofile/internal/models"
 	"github.com/deepteams/webp"
 	"github.com/disintegration/imaging"
+
+	"github.com/danilov-go/gophprofile/internal/models"
 )
 
 type Resizer struct{}

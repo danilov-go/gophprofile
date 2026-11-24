@@ -21,8 +21,9 @@ type Server struct {
 // New создает новый экземпляр Server.
 func New(port string, l log, r http.Handler) *Server {
 	server := &http.Server{
-		Addr:    port,
-		Handler: r,
+		Addr:              port,
+		Handler:           r,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 	return &Server{
 		Server: server,
@@ -42,13 +43,8 @@ func (serv *Server) Run() error {
 }
 
 // Stop останавливает HTTP-сервер.
-func (serv *Server) Stop() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := serv.Server.Shutdown(ctx); err != nil {
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil
-		}
+func (serv *Server) Stop(ctx context.Context) error {
+	if err := serv.Server.Shutdown(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil

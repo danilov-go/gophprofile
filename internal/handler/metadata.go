@@ -3,8 +3,9 @@ package handler
 import (
 	"net/http"
 
-	"github.com/danilov-go/gophprofile/internal/models"
 	"github.com/go-chi/chi/v5"
+
+	"github.com/danilov-go/gophprofile/internal/models"
 )
 
 // GetAvatarMetadata возвращает метаданные аватарки.

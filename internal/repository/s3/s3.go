@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+
 	"github.com/danilov-go/gophprofile/internal/config"
 )
 
@@ -66,7 +67,7 @@ func (s *S3Client) Download(ctx context.Context, s3Key string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer image.Body.Close()
+	defer func() { _ = image.Body.Close() }()
 	return io.ReadAll(image.Body)
 }
 

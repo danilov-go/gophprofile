@@ -13,8 +13,7 @@ func (h *Handler) UploadAvatar(w http.ResponseWriter, r *http.Request, userID st
 	r.Body = http.MaxBytesReader(w, r.Body, models.MaxSize)
 	file, header, err := r.FormFile("image")
 	if err != nil {
-		var maxBytesErr *http.MaxBytesError
-		if errors.As(err, &maxBytesErr) {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 			h.handleError(w, models.ErrFileTooLarge)
 			return
 		}
@@ -24,7 +23,7 @@ func (h *Handler) UploadAvatar(w http.ResponseWriter, r *http.Request, userID st
 		})
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	imageData, err := io.ReadAll(file)
 	if err != nil {
 		h.handleError(w, err)
