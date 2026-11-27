@@ -1,0 +1,33 @@
+packages:
+  github.com/danilov-go/gophprofile/internal/service:
+    config:
+      all: true
+      dir: "{{.InterfaceDir}}/mocks"
+      pkgname: mocks
+      filename: "mocks.go"
+  github.com/danilov-go/gophprofile/internal/handler:
+    config:
+      all: true
+      dir: "{{.InterfaceDir}}/mocks"
+      pkgname: mocks
+      filename: "mocks.go"
+  github.com/IBM/sarama:
+    config:
+      dir: internal/worker/mocks
+      pkgname: mocks
+      filename: "sarama_mocks.go"
+    interfaces:
+      ConsumerGroupSession:
+      ConsumerGroupClaim:
+  github.com/danilov-go/gophprofile/internal/worker:
+    config:
+      all: true
+      dir: "{{.InterfaceDir}}/mocks"
+      pkgname: mocks
+      filename: "mocks.go"
+  github.com/danilov-go/gophprofile/internal/publisher:
+    config:
+      all: true
+      dir: "{{.InterfaceDir}}/mocks"
+      pkgname: mocks
+      filename: "mocks.go"
