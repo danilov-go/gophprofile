@@ -28,7 +28,7 @@ func TestWorker_ConsumeClaim(t *testing.T) {
 		name       string
 		eventType  models.EventType
 		event      []byte
-		setupMocks func(repo *mocks.MockStorage, s3 *mocks.MockS3, resizer *mocks.MockResizer)
+		setupMocks func(repo *mocks.MockStorage, s3 *mocks.MockS3, resizer *mocks.MockResizer, producer *mocks.MockProducer)
 		wantMarked bool
 	}{
 		{
@@ -36,7 +36,7 @@ func TestWorker_ConsumeClaim(t *testing.T) {
 			eventType:  models.EventTypeUpload,
 			event:      uploadEvent,
 			wantMarked: true,
-			setupMocks: func(repo *mocks.MockStorage, s3 *mocks.MockS3, resizer *mocks.MockResizer) {
+			setupMocks: func(repo *mocks.MockStorage, s3 *mocks.MockS3, resizer *mocks.MockResizer, _ *mocks.MockProducer) {
 				imgBytes, thumbBytes := []byte("raw"), []byte("thumb")
 				repo.On("Get", mock.Anything, avatarID).Return(models.Avatar{ID: avatarID, UserID: userID, S3Key: originalKey}, nil).Once()
 				s3.On("Download", mock.Anything, originalKey).Return(imgBytes, nil).Once()
@@ -50,7 +50,7 @@ func TestWorker_ConsumeClaim(t *testing.T) {
 			eventType:  models.EventTypeDelete,
 			event:      deleteEvent,
 			wantMarked: true,
-			setupMocks: func(repo *mocks.MockStorage, s3 *mocks.MockS3, resizer *mocks.MockResizer) {
+			setupMocks: func(_ *mocks.MockStorage, s3 *mocks.MockS3, _ *mocks.MockResizer, _ *mocks.MockProducer) {
 				s3.On("Delete", mock.Anything, originalKey).Return(nil).Once()
 			},
 		},
@@ -59,23 +59,35 @@ func TestWorker_ConsumeClaim(t *testing.T) {
 			eventType:  "unknow",
 			event:      []byte(`{}`),
 			wantMarked: true,
+			setupMocks: func(_ *mocks.MockStorage, _ *mocks.MockS3, _ *mocks.MockResizer, producer *mocks.MockProducer) {
+				producer.On("SendToDLQ", mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+			},
 		},
 		{
 			name:       "отсутствует заголовок события",
 			event:      []byte(`{}`),
 			wantMarked: true,
+			setupMocks: func(_ *mocks.MockStorage, _ *mocks.MockS3, _ *mocks.MockResizer, producer *mocks.MockProducer) {
+				producer.On("SendToDLQ", mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+			},
 		},
 		{
 			name:       "битый JSON при загрузке",
 			eventType:  models.EventTypeUpload,
 			event:      []byte(`{invalid`),
 			wantMarked: true,
+			setupMocks: func(_ *mocks.MockStorage, _ *mocks.MockS3, _ *mocks.MockResizer, producer *mocks.MockProducer) {
+				producer.On("SendToDLQ", mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+			},
 		},
 		{
 			name:       "битый JSON при удалении",
 			eventType:  models.EventTypeDelete,
 			event:      []byte(`{invalid`),
-			wantMarked: false,
+			wantMarked: true,
+			setupMocks: func(_ *mocks.MockStorage, _ *mocks.MockS3, _ *mocks.MockResizer, producer *mocks.MockProducer) {
+				producer.On("SendToDLQ", mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -83,8 +95,9 @@ func TestWorker_ConsumeClaim(t *testing.T) {
 			repo := mocks.NewMockStorage(t)
 			s3 := mocks.NewMockS3(t)
 			resizer := mocks.NewMockResizer(t)
+			producer := mocks.NewMockProducer(t)
 			if tt.setupMocks != nil {
-				tt.setupMocks(repo, s3, resizer)
+				tt.setupMocks(repo, s3, resizer, producer)
 			}
 			msg := &sarama.ConsumerMessage{Value: tt.event}
 			if tt.eventType != "" {
@@ -103,6 +116,7 @@ func TestWorker_ConsumeClaim(t *testing.T) {
 			w := &Worker{
 				repo:       repo,
 				s3:         s3,
+				producer:   producer,
 				resizer:    resizer,
 				logger:     zaptest.NewLogger(t).Sugar(),
 				maxRetries: 1,

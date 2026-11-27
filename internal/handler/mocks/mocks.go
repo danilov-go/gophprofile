@@ -563,6 +563,72 @@ func (_c *MockService_GetMetadata_Call) RunAndReturn(run func(ctx context.Contex
 	return _c
 }
 
+// GetUserID provides a mock function for the type MockService
+func (_mock *MockService) GetUserID(tokenString string, key string) (string, error) {
+	ret := _mock.Called(tokenString, key)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetUserID")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) (string, error)); ok {
+		return returnFunc(tokenString, key)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string) string); ok {
+		r0 = returnFunc(tokenString, key)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = returnFunc(tokenString, key)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockService_GetUserID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetUserID'
+type MockService_GetUserID_Call struct {
+	*mock.Call
+}
+
+// GetUserID is a helper method to define mock.On call
+//   - tokenString string
+//   - key string
+func (_e *MockService_Expecter) GetUserID(tokenString any, key any) *MockService_GetUserID_Call {
+	return &MockService_GetUserID_Call{Call: _e.mock.On("GetUserID", tokenString, key)}
+}
+
+func (_c *MockService_GetUserID_Call) Run(run func(tokenString string, key string)) *MockService_GetUserID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockService_GetUserID_Call) Return(s string, err error) *MockService_GetUserID_Call {
+	_c.Call.Return(s, err)
+	return _c
+}
+
+func (_c *MockService_GetUserID_Call) RunAndReturn(run func(tokenString string, key string) (string, error)) *MockService_GetUserID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Health provides a mock function for the type MockService
 func (_mock *MockService) Health(ctx context.Context) models.HealthResponse {
 	ret := _mock.Called(ctx)

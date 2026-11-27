@@ -19,6 +19,7 @@ import (
 	"github.com/danilov-go/gophprofile/internal/handler"
 	"github.com/danilov-go/gophprofile/internal/imaging"
 	"github.com/danilov-go/gophprofile/internal/logger"
+	"github.com/danilov-go/gophprofile/internal/publisher"
 	"github.com/danilov-go/gophprofile/internal/repository/db"
 	"github.com/danilov-go/gophprofile/internal/repository/s3"
 	"github.com/danilov-go/gophprofile/internal/server"
@@ -49,6 +50,10 @@ func run() error {
 		logger.Log.Sugar().Error("ошибка парсинга конфигурации сервера")
 		return err
 	}
+	if err := cfg.Validate(); err != nil {
+		logger.Log.Sugar().Errorw("ошибка валидации конфигурации сервера", "error", err)
+		return err
+	}
 	storageDB, err := db.InitDB(cfg.DatabaseDSN)
 	if err != nil {
 		logger.Log.Sugar().Errorw("ошибка инициализации базы данных", "error", err)
@@ -75,7 +80,7 @@ func run() error {
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{cfg.Net},
 		AllowedMethods:   []string{"GET", "POST", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Content-Type", "X-User-ID"},
+		AllowedHeaders:   []string{"Accept", "Content-Type", "Authorization"},
 		ExposedHeaders:   []string{"ETag"},
 		AllowCredentials: false,
 		MaxAge:           300,
@@ -93,9 +98,13 @@ func run() error {
 		r.Get("/avatars/{avatar_id}/metadata", h.GetAvatarMetadata)
 		r.Get("/users/{user_id}/avatar", h.GetUserAvatar)
 		r.Get("/users/{user_id}/avatars", h.GetUserAvatars)
-		r.Post("/avatars", h.ValidateUserID(h.UploadAvatar))
-		r.Delete("/avatars/{avatar_id}", h.ValidateUserID(h.DeleteAvatar))
-		r.Delete("/users/{user_id}/avatar", h.ValidateUserID(h.DeleteUserAvatar))
+		r.Post("/avatars", h.ValidateUserID(cfg.SecretKey, h.UploadAvatar))
+		r.Delete("/avatars/{avatar_id}", h.ValidateUserID(cfg.SecretKey, h.DeleteAvatar))
+		r.Delete("/users/{user_id}/avatar", h.ValidateUserID(cfg.SecretKey, h.DeleteUserAvatar))
+	})
+	publisher := publisher.NewEventPublisher(storageDB, producer, logger.Log.Sugar(), cfg.PollInterval, cfg.EventLimit)
+	g.Go(func() error {
+		return publisher.Run(gCtx)
 	})
 	serv := server.New(cfg.Net, logger.Log.Sugar(), r)
 	g.Go(func() error {
@@ -104,8 +113,8 @@ func run() error {
 	})
 	g.Go(func() error {
 		<-gCtx.Done()
-		logger.Log.Sugar().Info("Остановка HTTP сервера...")
-		return serv.Stop(ctx)
+		stop()
+		return serv.Stop(context.WithoutCancel(ctx))
 	})
 	if err := g.Wait(); err != nil {
 		logger.Log.Sugar().Errorw("сервер аварийно завершил работу", "err", err)

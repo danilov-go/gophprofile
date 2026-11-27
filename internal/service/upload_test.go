@@ -19,7 +19,7 @@ func TestService_SaveAvatar(t *testing.T) {
 		name       string
 		data       []byte
 		mimeType   string
-		setupMocks func(storage *mocks.MockStorage, s3 *mocks.MockS3, producer *mocks.MockProducer, converter *mocks.MockConverter)
+		setupMocks func(storage *mocks.MockStorage, s3 *mocks.MockS3, converter *mocks.MockConverter)
 		expErr     error
 		checkRes   func(t *testing.T, res models.Avatar)
 	}{
@@ -27,13 +27,12 @@ func TestService_SaveAvatar(t *testing.T) {
 			name:     "положительный тест",
 			data:     imageData,
 			mimeType: "image/jpeg",
-			setupMocks: func(storage *mocks.MockStorage, s3 *mocks.MockS3, producer *mocks.MockProducer, converter *mocks.MockConverter) {
+			setupMocks: func(storage *mocks.MockStorage, s3 *mocks.MockS3, converter *mocks.MockConverter) {
 				converter.On("GetDimensions", imageData).Return(dims, nil).Once()
 				s3.On("Upload", mock.Anything, mock.AnythingOfType("string"), imageData).Return(nil).Once()
 				storage.On("Save", mock.Anything, mock.MatchedBy(func(m models.Avatar) bool {
 					return m.UserID == userID && m.FileName == fileName && m.S3Key == "avatars/"+userID+"/"+m.ID+".jpg"
 				})).Return(nil).Once()
-				producer.On("Send", mock.Anything, mock.AnythingOfType("string"), models.EventTypeUpload, mock.Anything).Return(nil).Once()
 			},
 			checkRes: func(t *testing.T, res models.Avatar) {
 				t.Helper()
@@ -54,7 +53,7 @@ func TestService_SaveAvatar(t *testing.T) {
 			name:     "превышен максимальный размер файла",
 			data:     make([]byte, models.MaxSize+1),
 			mimeType: "image/jpeg",
-			setupMocks: func(storage *mocks.MockStorage, s3 *mocks.MockS3, producer *mocks.MockProducer, converter *mocks.MockConverter) {
+			setupMocks: func(storage *mocks.MockStorage, s3 *mocks.MockS3, converter *mocks.MockConverter) {
 			},
 			expErr: models.ErrFileTooLarge,
 		},
@@ -62,7 +61,7 @@ func TestService_SaveAvatar(t *testing.T) {
 			name:     "неподдерживаемый mimeType",
 			data:     imageData,
 			mimeType: "application/pdf",
-			setupMocks: func(storage *mocks.MockStorage, s3 *mocks.MockS3, producer *mocks.MockProducer, converter *mocks.MockConverter) {
+			setupMocks: func(storage *mocks.MockStorage, s3 *mocks.MockS3, converter *mocks.MockConverter) {
 			},
 			expErr: models.ErrInvalidFormat,
 		},
@@ -70,7 +69,7 @@ func TestService_SaveAvatar(t *testing.T) {
 			name:     "ошибка получения размеров",
 			data:     imageData,
 			mimeType: "image/jpeg",
-			setupMocks: func(storage *mocks.MockStorage, s3 *mocks.MockS3, producer *mocks.MockProducer, converter *mocks.MockConverter) {
+			setupMocks: func(storage *mocks.MockStorage, s3 *mocks.MockS3, converter *mocks.MockConverter) {
 				converter.On("GetDimensions", imageData).Return(models.Dimensions{}, errTest).Once()
 			},
 			expErr: errTest,
@@ -79,22 +78,20 @@ func TestService_SaveAvatar(t *testing.T) {
 			name:     "ошибка S3 при загрузке",
 			data:     imageData,
 			mimeType: "image/jpeg",
-			setupMocks: func(storage *mocks.MockStorage, s3 *mocks.MockS3, producer *mocks.MockProducer, converter *mocks.MockConverter) {
+			setupMocks: func(storage *mocks.MockStorage, s3 *mocks.MockS3, converter *mocks.MockConverter) {
 				converter.On("GetDimensions", imageData).Return(dims, nil).Once()
 				s3.On("Upload", mock.Anything, mock.AnythingOfType("string"), imageData).Return(errTest).Once()
 			},
 			expErr: errTest,
 		},
 		{
-			name:     "ошибка брокера",
+			name:     "ошибка БД при сохранении — удаление файла из S3",
 			data:     imageData,
 			mimeType: "image/jpeg",
-			setupMocks: func(storage *mocks.MockStorage, s3 *mocks.MockS3, producer *mocks.MockProducer, converter *mocks.MockConverter) {
+			setupMocks: func(storage *mocks.MockStorage, s3 *mocks.MockS3, converter *mocks.MockConverter) {
 				converter.On("GetDimensions", imageData).Return(dims, nil).Once()
 				s3.On("Upload", mock.Anything, mock.AnythingOfType("string"), imageData).Return(nil).Once()
-				storage.On("Save", mock.Anything, mock.AnythingOfType("models.Avatar")).Return(nil).Once()
-				producer.On("Send", mock.Anything, mock.AnythingOfType("string"), models.EventTypeUpload, mock.Anything).Return(errTest).Once()
-				storage.On("Delete", mock.Anything, mock.AnythingOfType("string")).Return(nil).Once()
+				storage.On("Save", mock.Anything, mock.AnythingOfType("models.Avatar")).Return(errTest).Once()
 				s3.On("Delete", mock.Anything, mock.AnythingOfType("string")).Return(nil).Once()
 			},
 			expErr: errTest,
@@ -106,7 +103,7 @@ func TestService_SaveAvatar(t *testing.T) {
 			s3 := mocks.NewMockS3(t)
 			producer := mocks.NewMockProducer(t)
 			converter := mocks.NewMockConverter(t)
-			tt.setupMocks(storage, s3, producer, converter)
+			tt.setupMocks(storage, s3, converter)
 			svc := service.NewService(storage, s3, producer, converter)
 			res, err := svc.SaveAvatar(context.Background(), tt.data, userID, fileName, tt.mimeType)
 			if tt.expErr != nil {

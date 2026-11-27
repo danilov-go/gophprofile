@@ -44,6 +44,20 @@
           </div>
 
           <div>
+            <label for="authToken" class="block text-sm font-medium text-white mb-2">
+              JWT Token <span class="text-red-400">*</span>
+            </label>
+            <div class="flex gap-2">
+              <input type="text" id="authToken" name="authToken" required placeholder="Paste or generate Bearer JWT token"
+                class="flex-1 px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all">
+              <button type="button" id="genTokenBtn"
+                class="bg-white/15 hover:bg-white/25 border border-white/20 text-white px-4 py-3 rounded-lg text-sm font-semibold transition whitespace-nowrap">
+                Generate
+              </button>
+            </div>
+          </div>
+
+          <div>
             <label for="image" class="block text-sm font-medium text-white mb-2">
               Choose Image <span class="text-red-400">*</span>
             </label>
@@ -140,20 +154,67 @@
     const progressBar = document.getElementById('progressBar');
     const progressPercent = document.getElementById('progressPercent');
     const userIdInput = document.getElementById('userId');
+    const authTokenInput = document.getElementById('authToken');
     const goGalleryBtn = document.getElementById('goGalleryBtn');
     const viewAvatarBtn = document.getElementById('viewAvatarBtn');
     const deleteAvatarBtn = document.getElementById('deleteAvatarBtn');
     const viewGalleryLink = document.getElementById('viewGalleryLink');
     const dropZone = document.getElementById('dropZone');
     const fileNameLabel = document.getElementById('fileNameLabel');
-
     const getGalleryUrl = (id) => `/web/gallery/${encodeURIComponent(id)}`;
-
+    const getCleanToken = () => authTokenInput.value.trim().replace(/^Bearer\s+/i, '');
     const urlParams = new URLSearchParams(window.location.search);
     const initialUserId = urlParams.get('user_id');
+    const genTokenBtn = document.getElementById('genTokenBtn');
+
+    async function generateToken(userId, secret) {
+      const enc = new TextEncoder();
+      const b64url = (buf) =>
+        btoa(String.fromCharCode(...new Uint8Array(buf)))
+          .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+
+      const header = b64url(enc.encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' })));
+      const now = Math.floor(Date.now() / 1000);
+      const payload = b64url(enc.encode(JSON.stringify({
+        sub: userId,
+        user_id: userId,
+        iat: now,
+        exp: now + 86400
+      })));
+
+      const key = await crypto.subtle.importKey(
+        'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+      );
+      const sig = await crypto.subtle.sign('HMAC', key, enc.encode(`${header}.${payload}`));
+      return `${header}.${payload}.${b64url(sig)}`;
+    }
+
+    genTokenBtn.addEventListener('click', async () => {
+      const userId = userIdInput.value.trim();
+      if (!userId) {
+        showError('Enter User ID first to generate token');
+        userIdInput.focus();
+        return;
+      }
+      const secret = prompt('Enter server SECRET_KEY:')
+      if (!secret) return;
+
+      hideError();
+      const token = await generateToken(userId, secret);
+      authTokenInput.value = token;
+      localStorage.setItem('gophprofile_token', token);
+    });
     if (initialUserId) {
       userIdInput.value = initialUserId;
     }
+
+    const savedToken = localStorage.getItem('gophprofile_token');
+    if (savedToken) {
+      authTokenInput.value = savedToken;
+    }
+    authTokenInput.addEventListener('input', () => {
+      localStorage.setItem('gophprofile_token', getCleanToken());
+    });
 
     goGalleryBtn.addEventListener('click', () => {
       const userId = userIdInput.value.trim();
@@ -218,11 +279,11 @@
       }
     }
 
-    function uploadProgress(url, userId, formData) {
+    function uploadProgress(url, token, formData) {
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', url);
-        xhr.setRequestHeader('X-User-ID', userId);
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
 
         progressWrapper.classList.remove('hidden');
         progressBar.style.width = '0%';
@@ -254,10 +315,11 @@
       e.preventDefault();
 
       const userId = userIdInput.value.trim();
+      const token = getCleanToken();
       const imageFile = imageInput.files[0];
 
-      if (!userId || !imageFile) {
-        showError('Please fill in all required fields');
+      if (!token || !imageFile) {
+        showError('Please provide JWT Token and select an image');
         return;
       }
 
@@ -269,7 +331,7 @@
       formData.append('image', imageFile);
 
       try {
-        const response = await uploadProgress('/api/v1/avatars', userId, formData);
+        const response = await uploadProgress('/api/v1/avatars', token, formData);
         let parsedData;
 
         try {
@@ -278,7 +340,12 @@
           parsedData = response.bodyText;
         }
 
-        displayResponse(response, parsedData, userId);
+        const effectiveUserId = (parsedData && parsedData.user_id) || userId;
+        if (effectiveUserId) {
+          userIdInput.value = effectiveUserId;
+        }
+
+        displayResponse(response, parsedData, effectiveUserId);
 
       } catch (error) {
         showError(error.message);
@@ -330,9 +397,10 @@
 
     deleteAvatarBtn.addEventListener('click', async function () {
       const userId = userIdInput.value.trim();
-      if (!userId) {
-        showError('Please enter User ID to delete avatar');
-        userIdInput.focus();
+      const token = getCleanToken();
+      if (!userId || !token) {
+        showError('Please enter User ID and JWT Token to delete avatar');
+        (!userId ? userIdInput : authTokenInput).focus();
         return;
       }
 
@@ -348,7 +416,7 @@
         const response = await fetch(`/api/v1/users/${encodeURIComponent(userId)}/avatar`, {
           method: 'DELETE',
           headers: {
-            'X-User-ID': userId
+            'Authorization': `Bearer ${token}`
           }
         });
 
@@ -408,13 +476,15 @@
         responseJson.textContent = data || '';
       }
 
-      if (response.ok) {
+      if (response.ok && userId) {
         const galleryUrl = getGalleryUrl(userId);
         viewGalleryLink.href = galleryUrl;
         viewGalleryLink.classList.remove('hidden');
       } else {
         viewGalleryLink.classList.add('hidden');
-        showError(`Request failed: ${response.status} ${response.statusText}`);
+        if (!response.ok) {
+          showError(`Request failed: ${response.status} ${response.statusText}`);
+        }
       }
     }
 

@@ -71,20 +71,46 @@ func (s *storageDB) Save(ctx context.Context, meta models.Avatar) error {
 	if meta.ThumbnailS3Keys == nil {
 		thumbs = []byte("{}")
 	}
-	query := `
-		INSERT INTO avatars (id, user_id, file_name, mime_type, size_bytes,
-		width, height, s3_key, thumbnail_s3_keys,upload_status, processing_status,
-		created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-	`
-	_, err = s.db.ExecContext(ctx, query,
-		meta.ID, meta.UserID, meta.FileName, meta.MimeType, meta.SizeBytes,
-		meta.Dimensions.Width, meta.Dimensions.Height, meta.S3Key, thumbs,
-		meta.UploadStatus, meta.ProcessingStatus, meta.CreatedAt, meta.UpdatedAt,
-	)
+	event, err := json.Marshal(models.AvatarUploadEvent{
+		AvatarID: meta.ID,
+		UserID:   meta.UserID,
+		S3Key:    meta.S3Key,
+	})
 	if err != nil {
 		return err
 	}
-	return nil
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	query := `
+		INSERT INTO avatars (id, user_id, file_name, mime_type, size_bytes,
+		width, height, s3_key, thumbnail_s3_keys, upload_status, processing_status,
+		created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+	`
+	queryMeta, err := tx.PrepareContext(ctx, query)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = queryMeta.Close() }()
+	query = `INSERT INTO events (event_type, avatar_id, payload) VALUES ($1, $2, $3)`
+	queryEvent, err := tx.PrepareContext(ctx, query)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = queryEvent.Close() }()
+	if _, err := queryMeta.ExecContext(ctx,
+		meta.ID, meta.UserID, meta.FileName, meta.MimeType, meta.SizeBytes,
+		meta.Dimensions.Width, meta.Dimensions.Height, meta.S3Key, thumbs,
+		meta.UploadStatus, meta.ProcessingStatus, meta.CreatedAt, meta.UpdatedAt,
+	); err != nil {
+		return err
+	}
+	if _, err := queryEvent.ExecContext(ctx, models.EventTypeUpload, meta.ID, event); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // Get возвращает метаданные аватарки из базы данных.
@@ -120,10 +146,33 @@ func (s *storageDB) Get(ctx context.Context, id string) (models.Avatar, error) {
 }
 
 // Delete помечает метаданные аватарки как удаленные в базе данных.
-func (s *storageDB) Delete(ctx context.Context, id string) error {
+func (s *storageDB) Delete(ctx context.Context, id string, keys []string) error {
+	event, err := json.Marshal(models.AvatarDeleteEvent{
+		AvatarID: id,
+		S3Keys:   keys,
+	})
+	if err != nil {
+		return err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
 	query := `UPDATE avatars SET deleted_at = $1, updated_at = $1 WHERE id = $2 AND deleted_at IS NULL`
+	update, err := tx.PrepareContext(ctx, query)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = update.Close() }()
+	query = `INSERT INTO events (event_type, avatar_id, payload) VALUES ($1, $2, $3)`
+	insert, err := tx.PrepareContext(ctx, query)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = insert.Close() }()
 	now := time.Now().UTC()
-	res, err := s.db.ExecContext(ctx, query, now, id)
+	res, err := update.ExecContext(ctx, now, id)
 	if err != nil {
 		return err
 	}
@@ -134,7 +183,10 @@ func (s *storageDB) Delete(ctx context.Context, id string) error {
 	if rows == 0 {
 		return models.ErrAvatarNotFound
 	}
-	return nil
+	if _, err := insert.ExecContext(ctx, models.EventTypeDelete, id, event); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // UpdateProcessingStatus обновляет статус обработки аватарки и ключи миниатюр в базе данных.
@@ -251,4 +303,36 @@ func (s *storageDB) GetAllByUserID(ctx context.Context, userID string) ([]models
 		return nil, err
 	}
 	return avatars, nil
+}
+
+// GetEvents возвращает неотправленные события из таблицы events.
+func (s *storageDB) GetEvents(ctx context.Context, limit int) ([]models.Event, error) {
+	query := `
+		SELECT id, event_type, avatar_id, payload, created_at
+		FROM events	WHERE processed_at IS NULL ORDER BY created_at ASC LIMIT $1
+`
+	rows, err := s.db.QueryContext(ctx, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var events []models.Event
+	for rows.Next() {
+		var ev models.Event
+		if err := rows.Scan(&ev.ID, &ev.EventType, &ev.AvatarID, &ev.Payload, &ev.CreatedAt); err != nil {
+			return nil, err
+		}
+		events = append(events, ev)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return events, nil
+}
+
+// UpdateEventStatus помечает событие как отправленное в брокер.
+func (s *storageDB) UpdateEventStatus(ctx context.Context, id string) error {
+	query := `UPDATE events SET processed_at = $1 WHERE id = $2`
+	_, err := s.db.ExecContext(ctx, query, time.Now().UTC(), id)
+	return err
 }

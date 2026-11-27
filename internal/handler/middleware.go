@@ -11,23 +11,32 @@ import (
 
 type UserHandlerFunc func(w http.ResponseWriter, r *http.Request, userID string)
 
-func (h *Handler) ValidateUserID(next UserHandlerFunc) http.HandlerFunc {
+func (h *Handler) ValidateUserID(key string, next UserHandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		headerUserID := strings.TrimSpace(r.Header.Get("X-User-Id"))
-		if headerUserID == "" || len(headerUserID) > 255 {
-			h.writeJSON(w, http.StatusBadRequest, models.ErrorResponse{
-				Error:   "Invalid userID",
-				Details: "X-User-ID header is required and must be <= 255 chars",
+		authHeader := r.Header.Get("Authorization")
+		token, ok := strings.CutPrefix(authHeader, "Bearer ")
+		if !ok || token == "" {
+			h.writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{
+				Error:   "Unauthorized",
+				Details: "Authorization Bearer token is required",
 			})
 			return
 		}
-		if userID := chi.URLParam(r, "user_id"); userID != "" && userID != headerUserID {
+		userID, err := h.service.GetUserID(token, key)
+		if err != nil || userID == "" {
+			h.writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{
+				Error:   "Unauthorized",
+				Details: "Invalid or expired token",
+			})
+			return
+		}
+		if urlUserID := chi.URLParam(r, "user_id"); urlUserID != "" && urlUserID != userID {
 			h.writeJSON(w, http.StatusForbidden, models.ErrorResponse{
 				Error:   "Forbidden",
-				Details: "user_id does not match X-User-ID header",
+				Details: "user_id does not match authenticated user",
 			})
 			return
 		}
-		next(w, r, headerUserID)
+		next(w, r, userID)
 	}
 }

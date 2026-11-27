@@ -3,6 +3,8 @@ package broker
 
 import (
 	"context"
+	"errors"
+	"strconv"
 
 	"github.com/IBM/sarama"
 
@@ -56,6 +58,40 @@ func (p *Producer) Send(ctx context.Context, key string, eventType models.EventT
 		Value: sarama.ByteEncoder(eventBytes),
 	}
 	_, _, err := p.syncProducer.SendMessage(msg)
+	return err
+}
+
+// SendToDLQ отправляет необработанное сообщение в топик ошибок (DLQ).
+func (p *Producer) SendToDLQ(ctx context.Context, msg *sarama.ConsumerMessage, dlq error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if msg == nil {
+		return errors.New("consumer message is nil")
+	}
+	dlqErr := "unknown"
+	if dlq != nil {
+		dlqErr = dlq.Error()
+	}
+	headers := make([]sarama.RecordHeader, 0, len(msg.Headers)+4)
+	for _, h := range msg.Headers {
+		if h != nil {
+			headers = append(headers, *h)
+		}
+	}
+	headers = append(headers,
+		sarama.RecordHeader{Key: []byte("x-dlq-reason"), Value: []byte(dlqErr)},
+		sarama.RecordHeader{Key: []byte("x-original-topic"), Value: []byte(msg.Topic)},
+		sarama.RecordHeader{Key: []byte("x-original-partition"), Value: []byte(strconv.Itoa(int(msg.Partition)))},
+		sarama.RecordHeader{Key: []byte("x-original-offset"), Value: []byte(strconv.FormatInt(msg.Offset, 10))},
+	)
+	dlqMsg := &sarama.ProducerMessage{
+		Topic:   p.topic,
+		Key:     sarama.ByteEncoder(msg.Key),
+		Value:   sarama.ByteEncoder(msg.Value),
+		Headers: headers,
+	}
+	_, _, err := p.syncProducer.SendMessage(dlqMsg)
 	return err
 }
 

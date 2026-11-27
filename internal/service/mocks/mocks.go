@@ -48,16 +48,16 @@ func (_m *MockStorage) EXPECT() *MockStorage_Expecter {
 }
 
 // Delete provides a mock function for the type MockStorage
-func (_mock *MockStorage) Delete(ctx context.Context, id string) error {
-	ret := _mock.Called(ctx, id)
+func (_mock *MockStorage) Delete(ctx context.Context, id string, keys []string) error {
+	ret := _mock.Called(ctx, id, keys)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Delete")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) error); ok {
-		r0 = returnFunc(ctx, id)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string) error); ok {
+		r0 = returnFunc(ctx, id, keys)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -72,11 +72,12 @@ type MockStorage_Delete_Call struct {
 // Delete is a helper method to define mock.On call
 //   - ctx context.Context
 //   - id string
-func (_e *MockStorage_Expecter) Delete(ctx any, id any) *MockStorage_Delete_Call {
-	return &MockStorage_Delete_Call{Call: _e.mock.On("Delete", ctx, id)}
+//   - keys []string
+func (_e *MockStorage_Expecter) Delete(ctx any, id any, keys any) *MockStorage_Delete_Call {
+	return &MockStorage_Delete_Call{Call: _e.mock.On("Delete", ctx, id, keys)}
 }
 
-func (_c *MockStorage_Delete_Call) Run(run func(ctx context.Context, id string)) *MockStorage_Delete_Call {
+func (_c *MockStorage_Delete_Call) Run(run func(ctx context.Context, id string, keys []string)) *MockStorage_Delete_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -86,9 +87,14 @@ func (_c *MockStorage_Delete_Call) Run(run func(ctx context.Context, id string))
 		if args[1] != nil {
 			arg1 = args[1].(string)
 		}
+		var arg2 []string
+		if args[2] != nil {
+			arg2 = args[2].([]string)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -99,7 +105,7 @@ func (_c *MockStorage_Delete_Call) Return(err error) *MockStorage_Delete_Call {
 	return _c
 }
 
-func (_c *MockStorage_Delete_Call) RunAndReturn(run func(ctx context.Context, id string) error) *MockStorage_Delete_Call {
+func (_c *MockStorage_Delete_Call) RunAndReturn(run func(ctx context.Context, id string, keys []string) error) *MockStorage_Delete_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -770,75 +776,6 @@ func (_c *MockProducer_Ping_Call) Return(err error) *MockProducer_Ping_Call {
 }
 
 func (_c *MockProducer_Ping_Call) RunAndReturn(run func(ctx context.Context) error) *MockProducer_Ping_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// Send provides a mock function for the type MockProducer
-func (_mock *MockProducer) Send(ctx context.Context, key string, eventType models.EventType, eventBytes []byte) error {
-	ret := _mock.Called(ctx, key, eventType, eventBytes)
-
-	if len(ret) == 0 {
-		panic("no return value specified for Send")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, models.EventType, []byte) error); ok {
-		r0 = returnFunc(ctx, key, eventType, eventBytes)
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockProducer_Send_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Send'
-type MockProducer_Send_Call struct {
-	*mock.Call
-}
-
-// Send is a helper method to define mock.On call
-//   - ctx context.Context
-//   - key string
-//   - eventType models.EventType
-//   - eventBytes []byte
-func (_e *MockProducer_Expecter) Send(ctx any, key any, eventType any, eventBytes any) *MockProducer_Send_Call {
-	return &MockProducer_Send_Call{Call: _e.mock.On("Send", ctx, key, eventType, eventBytes)}
-}
-
-func (_c *MockProducer_Send_Call) Run(run func(ctx context.Context, key string, eventType models.EventType, eventBytes []byte)) *MockProducer_Send_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 models.EventType
-		if args[2] != nil {
-			arg2 = args[2].(models.EventType)
-		}
-		var arg3 []byte
-		if args[3] != nil {
-			arg3 = args[3].([]byte)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-			arg3,
-		)
-	})
-	return _c
-}
-
-func (_c *MockProducer_Send_Call) Return(err error) *MockProducer_Send_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockProducer_Send_Call) RunAndReturn(run func(ctx context.Context, key string, eventType models.EventType, eventBytes []byte) error) *MockProducer_Send_Call {
 	_c.Call.Return(run)
 	return _c
 }

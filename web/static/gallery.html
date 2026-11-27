@@ -195,7 +195,14 @@
       grid.appendChild(emptyBox);
     }
 
-    async function deleteAvatar(avatarId, btn) {
+        async function deleteAvatar(avatarId, btn) {
+      let token = localStorage.getItem('gophprofile_token') || '';
+      if (!token) {
+        token = (prompt('Enter your Bearer JWT token to delete avatar:') || '').trim().replace(/^Bearer\s+/i, '');
+        if (!token) return;
+        localStorage.setItem('gophprofile_token', token);
+      }
+
       if (!confirm('Delete this avatar?')) return;
       btn.disabled = true;
       btn.textContent = '...';
@@ -203,7 +210,7 @@
       try {
         const res = await fetch(`/api/v1/avatars/${encodeURIComponent(avatarId)}`, {
           method: 'DELETE',
-          headers: { 'X-User-ID': userId }
+          headers: { 'Authorization': `Bearer ${token}` }
         });
 
         if (res.ok) {

@@ -1,7 +1,10 @@
 package worker
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 
 	"github.com/IBM/sarama"
 
@@ -23,32 +26,33 @@ func (w *Worker) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.
 			if !ok {
 				return nil
 			}
+			var err error
 			switch getAction(message.Headers) {
 			case models.EventTypeUpload:
 				var event models.AvatarUploadEvent
-				if err := json.Unmarshal(message.Value, &event); err != nil {
-					w.logger.Errorw("ошибка десериализации", "error", err)
-					session.MarkMessage(message, "")
-					continue
-				}
-				if err := w.retry(session.Context(), func() error {
-					return w.HandleUploadEvent(session.Context(), event)
-				}); err != nil {
-					w.logger.Errorw("ошибка обновления данных", "error", err)
+				if err = json.Unmarshal(message.Value, &event); err == nil {
+					err = w.retry(session.Context(), func() error {
+						return w.HandleUploadEvent(session.Context(), event)
+					})
 				}
 			case models.EventTypeDelete:
 				var event models.AvatarDeleteEvent
-				if err := json.Unmarshal(message.Value, &event); err != nil {
-					w.logger.Errorw("ошибка десериализации", "error", err)
-					continue
-				}
-				if err := w.retry(session.Context(), func() error {
-					return w.HandleDeleteEvent(session.Context(), event)
-				}); err != nil {
-					w.logger.Errorw("ошибка удаления данных", "error", err)
+				if err = json.Unmarshal(message.Value, &event); err == nil {
+					err = w.retry(session.Context(), func() error {
+						return w.HandleDeleteEvent(session.Context(), event)
+					})
 				}
 			default:
-				w.logger.Errorw("неизвестный тип события", "event_type", getAction(message.Headers))
+				err = fmt.Errorf("неизвестный тип события: %s", getAction(message.Headers))
+			}
+			if err != nil {
+				if errors.Is(err, context.Canceled) || session.Context().Err() != nil {
+					return nil
+				}
+				if dlq := w.producer.SendToDLQ(session.Context(), message, err); dlq != nil {
+					w.logger.Errorw("ошибка отправки в DLQ", "error", dlq)
+					return dlq
+				}
 			}
 			session.MarkMessage(message, "")
 		case <-session.Context().Done():

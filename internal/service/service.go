@@ -13,7 +13,7 @@ type Storage interface {
 	Get(ctx context.Context, id string) (models.Avatar, error)
 	GetByUserID(ctx context.Context, id string) (models.Avatar, error)
 	GetAllByUserID(ctx context.Context, userID string) ([]models.Avatar, error)
-	Delete(ctx context.Context, id string) error
+	Delete(ctx context.Context, id string, keys []string) error
 	Ping(ctx context.Context) error
 }
 
@@ -25,9 +25,8 @@ type S3 interface {
 	Ping(ctx context.Context) error
 }
 
-// Producer определяет методы отправки событий в брокер сообщений.
+// Producer определяет методы проверки работы брокера.
 type Producer interface {
-	Send(ctx context.Context, key string, eventType models.EventType, eventBytes []byte) error
 	Ping(ctx context.Context) error
 }
 

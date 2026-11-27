@@ -56,6 +56,9 @@ func TestMemStorage_Save(t *testing.T) {
 			meta, err := storage.Get(context.Background(), tt.expMeta.ID)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expMeta, meta)
+			events, err := storage.GetEvents(context.Background(), 10)
+			require.NoError(t, err)
+			assert.Len(t, events, 1)
 		})
 	}
 }
@@ -135,10 +138,12 @@ func TestMemStorage_Delete(t *testing.T) {
 	deletedTime := now.Add(time.Minute)
 	avatar := models.Avatar{ID: "1", UserID: "UserID", CreatedAt: now}
 	deletedAvatar := models.Avatar{ID: "2", UserID: "UserID", CreatedAt: now, DeletedAt: &deletedTime}
+	keys := []string{models.GenerateThumbnailS3Key("1", models.SizeSmall), models.GenerateThumbnailS3Key("1", models.SizeMedium)}
 	tests := []struct {
 		name      string
 		cancelCtx bool
 		metaData  []models.Avatar
+		keys      []string
 		deleteID  string
 		expErr    error
 	}{
@@ -146,6 +151,7 @@ func TestMemStorage_Delete(t *testing.T) {
 			name:      "положительный тест",
 			cancelCtx: false,
 			metaData:  []models.Avatar{avatar},
+			keys:      keys,
 			deleteID:  "1",
 			expErr:    nil,
 		},
@@ -183,14 +189,17 @@ func TestMemStorage_Delete(t *testing.T) {
 			for _, m := range tt.metaData {
 				require.NoError(t, storage.Save(context.Background(), m))
 			}
-			err := storage.Delete(ctx, tt.deleteID)
+			err := storage.Delete(ctx, tt.deleteID, tt.keys)
 			if tt.expErr != nil {
 				assert.ErrorIs(t, err, tt.expErr)
 				return
 			}
 			require.NoError(t, err)
 			_, err = storage.Get(context.Background(), tt.deleteID)
-			assert.ErrorIs(t, err, models.ErrAvatarNotFound)
+			require.ErrorIs(t, err, models.ErrAvatarNotFound)
+			events, err := storage.GetEvents(context.Background(), 10)
+			require.NoError(t, err)
+			assert.Len(t, events, 2)
 		})
 	}
 }
@@ -360,6 +369,171 @@ func TestMemStorage_Ping(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
+		})
+	}
+}
+
+func TestMemStorage_GetEvents(t *testing.T) {
+	now := time.Now().UTC()
+	avatars := []models.Avatar{
+		{ID: "1", UserID: "UserID", CreatedAt: now},
+		{ID: "2", UserID: "UserID", CreatedAt: now.Add(time.Minute)},
+	}
+	tests := []struct {
+		name      string
+		avatars   []models.Avatar
+		limit     int
+		cancelCtx bool
+		expLen    int
+		expErr    error
+	}{
+		{
+			name:      "положительный тест",
+			avatars:   avatars,
+			limit:     10,
+			cancelCtx: false,
+			expLen:    2,
+			expErr:    nil,
+		},
+		{
+			name:      "пустой список событий",
+			avatars:   nil,
+			limit:     10,
+			cancelCtx: false,
+			expLen:    0,
+			expErr:    nil,
+		},
+		{
+			name:      "ошибка отмены контекста",
+			avatars:   avatars,
+			limit:     10,
+			cancelCtx: true,
+			expErr:    context.Canceled,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage := memory.NewMemStorage()
+			for _, a := range tt.avatars {
+				require.NoError(t, storage.Save(context.Background(), a))
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			if tt.cancelCtx {
+				cancel()
+			} else {
+				defer cancel()
+			}
+			events, err := storage.GetEvents(ctx, tt.limit)
+			if tt.expErr != nil {
+				assert.ErrorIs(t, err, tt.expErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Len(t, events, tt.expLen)
+		})
+	}
+}
+
+func TestMemStorage_UpdateEventStatus(t *testing.T) {
+	avatar := models.Avatar{
+		ID:        "1",
+		UserID:    "UserID",
+		CreatedAt: time.Now().UTC(),
+	}
+	tests := []struct {
+		name      string
+		cancelCtx bool
+		expErr    error
+	}{
+		{
+			name:      "положительный тест",
+			cancelCtx: false,
+			expErr:    nil,
+		},
+		{
+			name:      "ошибка отмены контекста",
+			cancelCtx: true,
+			expErr:    context.Canceled,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage := memory.NewMemStorage()
+			require.NoError(t, storage.Save(context.Background(), avatar))
+			events, err := storage.GetEvents(context.Background(), 10)
+			require.NoError(t, err)
+			require.Len(t, events, 1)
+			id := events[0].ID
+			ctx, cancel := context.WithCancel(context.Background())
+			if tt.cancelCtx {
+				cancel()
+			} else {
+				defer cancel()
+			}
+			err = storage.UpdateEventStatus(ctx, id)
+			if tt.expErr != nil {
+				assert.ErrorIs(t, err, tt.expErr)
+				return
+			}
+			require.NoError(t, err)
+			events, err = storage.GetEvents(context.Background(), 10)
+			require.NoError(t, err)
+			assert.Empty(t, events)
+		})
+	}
+}
+
+func TestMemStorage_UpdateProcessingStatus(t *testing.T) {
+	avatar := models.Avatar{
+		ID:               "1",
+		UserID:           "UserID",
+		ProcessingStatus: models.StatusProcessing,
+	}
+	thumbs := map[models.SizeAvatar]string{
+		models.SizeSmall: models.GenerateThumbnailS3Key("1", models.SizeSmall),
+	}
+	tests := []struct {
+		name      string
+		expID     string
+		cancelCtx bool
+		expErr    error
+	}{
+		{
+			name:  "положительный тест",
+			expID: "1",
+		},
+		{
+			name:   "обновление несуществующей записи",
+			expID:  "unknown",
+			expErr: models.ErrAvatarNotFound,
+		},
+		{
+			name:      "ошибка отмены контекста",
+			expID:     "1",
+			cancelCtx: true,
+			expErr:    context.Canceled,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage := memory.NewMemStorage()
+			require.NoError(t, storage.Save(context.Background(), avatar))
+			ctx, cancel := context.WithCancel(context.Background())
+			if tt.cancelCtx {
+				cancel()
+			} else {
+				defer cancel()
+			}
+			err := storage.UpdateProcessingStatus(ctx, tt.expID, models.StatusCompleted, thumbs)
+			if tt.expErr != nil {
+				assert.ErrorIs(t, err, tt.expErr)
+				return
+			}
+			require.NoError(t, err)
+			meta, err := storage.Get(context.Background(), tt.expID)
+			require.NoError(t, err)
+			assert.Equal(t, models.StatusCompleted, meta.ProcessingStatus)
+			assert.Equal(t, thumbs, meta.ThumbnailS3Keys)
 		})
 	}
 }

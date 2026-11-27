@@ -33,6 +33,11 @@ type Resizer interface {
 	Resize(imageData []byte) ([]models.ThumbnailData, error)
 }
 
+// Producer определяет методы отправки необработанных событий в очередь ошибок.
+type Producer interface {
+	SendToDLQ(ctx context.Context, msg *sarama.ConsumerMessage, reason error) error
+}
+
 // Config содержит параметры конфигурации воркера.
 type Config struct {
 	Brokers    []string
@@ -47,6 +52,7 @@ type Worker struct {
 	repo          Storage
 	s3            S3
 	resizer       Resizer
+	producer      Producer
 	consumerGroup sarama.ConsumerGroup
 	topic         string
 	logger        log
@@ -55,7 +61,7 @@ type Worker struct {
 }
 
 // NewWorker создает новый экземпляр Worker.
-func NewWorker(cfg Config, repo Storage, s3 S3, resizer Resizer, l log) (*Worker, error) {
+func NewWorker(cfg Config, repo Storage, s3 S3, p Producer, resizer Resizer, l log) (*Worker, error) {
 	config := sarama.NewConfig()
 	config.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{sarama.NewBalanceStrategyRoundRobin()}
 	config.Consumer.Offsets.Initial = sarama.OffsetOldest
@@ -67,6 +73,7 @@ func NewWorker(cfg Config, repo Storage, s3 S3, resizer Resizer, l log) (*Worker
 		repo:          repo,
 		s3:            s3,
 		resizer:       resizer,
+		producer:      p,
 		consumerGroup: consumer,
 		topic:         cfg.Topic,
 		logger:        l,

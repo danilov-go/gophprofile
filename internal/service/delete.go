@@ -35,8 +35,5 @@ func (s *Service) deleteAvatar(ctx context.Context, meta models.Avatar, actorUse
 			s3Keys = append(s3Keys, thumbKey)
 		}
 	}
-	if err := s.storage.Delete(ctx, meta.ID); err != nil {
-		return err
-	}
-	return s.PublishDeleteEvent(ctx, meta.ID, s3Keys)
+	return s.storage.Delete(ctx, meta.ID, s3Keys)
 }

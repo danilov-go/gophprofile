@@ -44,7 +44,9 @@ func (serv *Server) Run() error {
 
 // Stop останавливает HTTP-сервер.
 func (serv *Server) Stop(ctx context.Context) error {
-	if err := serv.Server.Shutdown(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	ctxStop, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := serv.Server.Shutdown(ctxStop); err != nil {
 		return err
 	}
 	return nil

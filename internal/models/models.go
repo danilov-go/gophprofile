@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // ProcessingStatus представляет статус фоновой обработки аватарки.
@@ -62,3 +64,13 @@ func (a *Avatar) GenerateS3Key(ext string) {
 func GenerateThumbnailS3Key(avatarID string, size SizeAvatar) string {
 	return fmt.Sprintf("thumbnails/%s/%s.jpg", avatarID, size)
 }
+
+// Claims содержит полезную нагрузку JWT-токена.
+type Claims struct {
+	jwt.RegisteredClaims
+
+	UserID string `json:"user_id"`
+}
+
+// TokenExp определяет время жизни JWT-токена.
+const TokenExp = time.Hour * 24

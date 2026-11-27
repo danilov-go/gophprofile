@@ -22,6 +22,7 @@ type Service interface {
 	GetMetadata(ctx context.Context, id string) (models.MetaDataResponse, error)
 	Delete(ctx context.Context, id, userID string) error
 	DeleteByUserID(ctx context.Context, userID string) error
+	GetUserID(tokenString, key string) (string, error)
 	Health(ctx context.Context) models.HealthResponse
 }
 

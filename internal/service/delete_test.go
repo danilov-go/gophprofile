@@ -2,7 +2,6 @@ package service_test
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,22 +28,17 @@ func TestService_Delete(t *testing.T) {
 		name       string
 		avatarID   string
 		userID     string
-		setupMocks func(storage *mocks.MockStorage, producer *mocks.MockProducer)
+		setupMocks func(storage *mocks.MockStorage)
 		expErr     error
 	}{
 		{
 			name:     "положительный тест",
 			avatarID: avatarID,
 			userID:   userID,
-			setupMocks: func(storage *mocks.MockStorage, producer *mocks.MockProducer) {
+			setupMocks: func(storage *mocks.MockStorage) {
 				storage.On("Get", mock.Anything, avatarID).Return(avatar, nil).Once()
-				storage.On("Delete", mock.Anything, avatarID).Return(nil).Once()
-				producer.On("Send", mock.Anything, avatarID, models.EventTypeDelete, mock.MatchedBy(func(data []byte) bool {
-					var ev models.AvatarDeleteEvent
-					if err := json.Unmarshal(data, &ev); err != nil {
-						return false
-					}
-					return ev.AvatarID == avatarID && assert.ElementsMatch(t, expKeys, ev.S3Keys)
+				storage.On("Delete", mock.Anything, avatarID, mock.MatchedBy(func(keys []string) bool {
+					return assert.ElementsMatch(t, expKeys, keys)
 				})).Return(nil).Once()
 			},
 			expErr: nil,
@@ -53,14 +47,14 @@ func TestService_Delete(t *testing.T) {
 			name:       "невалидный формат UUID",
 			avatarID:   "invalid",
 			userID:     userID,
-			setupMocks: func(storage *mocks.MockStorage, producer *mocks.MockProducer) {},
+			setupMocks: func(storage *mocks.MockStorage) {},
 			expErr:     models.ErrAvatarNotFound,
 		},
 		{
 			name:     "аватарка не найдена в БД",
 			avatarID: avatarID,
 			userID:   userID,
-			setupMocks: func(storage *mocks.MockStorage, producer *mocks.MockProducer) {
+			setupMocks: func(storage *mocks.MockStorage) {
 				storage.On("Get", mock.Anything, avatarID).Return(models.Avatar{}, models.ErrAvatarNotFound).Once()
 			},
 			expErr: models.ErrAvatarNotFound,
@@ -69,7 +63,7 @@ func TestService_Delete(t *testing.T) {
 			name:     "удаление чужой аватарки",
 			avatarID: avatarID,
 			userID:   unknowID,
-			setupMocks: func(storage *mocks.MockStorage, producer *mocks.MockProducer) {
+			setupMocks: func(storage *mocks.MockStorage) {
 				storage.On("Get", mock.Anything, avatarID).Return(avatar, nil).Once()
 			},
 			expErr: models.ErrForbidden,
@@ -78,21 +72,9 @@ func TestService_Delete(t *testing.T) {
 			name:     "ошибка БД",
 			avatarID: avatarID,
 			userID:   userID,
-			setupMocks: func(storage *mocks.MockStorage, producer *mocks.MockProducer) {
+			setupMocks: func(storage *mocks.MockStorage) {
 				storage.On("Get", mock.Anything, avatarID).Return(avatar, nil).Once()
-				storage.On("Delete", mock.Anything, avatarID).Return(errTest).Once()
-			},
-			expErr: errTest,
-		},
-		{
-			name:     "ошибка брокера",
-			avatarID: avatarID,
-			userID:   userID,
-			setupMocks: func(storage *mocks.MockStorage, producer *mocks.MockProducer) {
-				storage.On("Get", mock.Anything, avatarID).Return(avatar, nil).Once()
-				storage.On("Delete", mock.Anything, avatarID).Return(nil).Once()
-				producer.On("Send", mock.Anything, avatarID, models.EventTypeDelete, mock.Anything).
-					Return(errTest).Once()
+				storage.On("Delete", mock.Anything, avatarID, mock.Anything).Return(errTest).Once()
 			},
 			expErr: errTest,
 		},
@@ -103,7 +85,7 @@ func TestService_Delete(t *testing.T) {
 			s3 := mocks.NewMockS3(t)
 			producer := mocks.NewMockProducer(t)
 			converter := mocks.NewMockConverter(t)
-			tt.setupMocks(storage, producer)
+			tt.setupMocks(storage)
 			svc := service.NewService(storage, s3, producer, converter)
 			err := svc.Delete(context.Background(), tt.avatarID, tt.userID)
 			if tt.expErr != nil {
@@ -121,32 +103,25 @@ func TestService_DeleteByUserID(t *testing.T) {
 		UserID: userID,
 		S3Key:  originalKey,
 	}
-	expBytes, err := json.Marshal(models.AvatarDeleteEvent{
-		AvatarID: avatarID,
-		S3Keys:   []string{originalKey},
-	})
-	require.NoError(t, err)
 	tests := []struct {
 		name       string
 		userID     string
-		setupMocks func(storage *mocks.MockStorage, producer *mocks.MockProducer)
+		setupMocks func(storage *mocks.MockStorage)
 		expErr     error
 	}{
 		{
 			name:   "положительный тест",
 			userID: userID,
-			setupMocks: func(storage *mocks.MockStorage, producer *mocks.MockProducer) {
+			setupMocks: func(storage *mocks.MockStorage) {
 				storage.On("GetByUserID", mock.Anything, userID).Return(avatar, nil).Once()
-				storage.On("Delete", mock.Anything, avatarID).Return(nil).Once()
-				producer.On("Send", mock.Anything, avatarID, models.EventTypeDelete, expBytes).
-					Return(nil).Once()
+				storage.On("Delete", mock.Anything, avatarID, []string{originalKey}).Return(nil).Once()
 			},
 			expErr: nil,
 		},
 		{
 			name:   "текущая аватарка пользователя не найдена",
 			userID: userID,
-			setupMocks: func(storage *mocks.MockStorage, producer *mocks.MockProducer) {
+			setupMocks: func(storage *mocks.MockStorage) {
 				storage.On("GetByUserID", mock.Anything, userID).Return(models.Avatar{}, errTest).Once()
 			},
 			expErr: errTest,
@@ -158,7 +133,7 @@ func TestService_DeleteByUserID(t *testing.T) {
 			s3 := mocks.NewMockS3(t)
 			producer := mocks.NewMockProducer(t)
 			converter := mocks.NewMockConverter(t)
-			tt.setupMocks(storage, producer)
+			tt.setupMocks(storage)
 			svc := service.NewService(storage, s3, producer, converter)
 			err := svc.DeleteByUserID(context.Background(), tt.userID)
 			if tt.expErr != nil {

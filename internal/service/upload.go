@@ -43,10 +43,5 @@ func (s *Service) SaveAvatar(ctx context.Context, imageData []byte, userID, file
 		_ = s.s3.Delete(context.WithoutCancel(ctx), meta.S3Key)
 		return models.Avatar{}, err
 	}
-	if err := s.PublishUploadEvent(ctx, meta.ID, meta.UserID, meta.S3Key); err != nil {
-		_ = s.storage.Delete(ctx, meta.ID)
-		_ = s.s3.Delete(context.WithoutCancel(ctx), meta.S3Key)
-		return models.Avatar{}, err
-	}
 	return meta, nil
 }

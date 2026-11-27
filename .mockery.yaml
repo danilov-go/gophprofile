@@ -25,3 +25,9 @@ packages:
       dir: "{{.InterfaceDir}}/mocks"
       pkgname: mocks
       filename: "mocks.go"
+  github.com/danilov-go/gophprofile/internal/publisher:
+    config:
+      all: true
+      dir: "{{.InterfaceDir}}/mocks"
+      pkgname: mocks
+      filename: "mocks.go"

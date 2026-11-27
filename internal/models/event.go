@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 type EventType string
 
 const (
@@ -17,4 +19,13 @@ type AvatarUploadEvent struct {
 type AvatarDeleteEvent struct {
 	AvatarID string   `json:"avatar_id"`
 	S3Keys   []string `json:"s3_keys"`
+}
+
+type Event struct {
+	ID          string
+	EventType   EventType
+	AvatarID    string
+	Payload     []byte
+	CreatedAt   time.Time
+	ProcessedAt *time.Time
 }
